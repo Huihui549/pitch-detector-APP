@@ -1,0 +1,73 @@
+# pitfalls.md — pitch-detector-APP
+
+跨功能的坑总表，**只增不删**。上游已验证的坑按 R7 分析后继承（避免重踩），本项目新坑追加在后。
+
+## 一、继承自上游（`D:\dev_project\pitch-detector\dev-docs\pitch-detector\pitfalls.md` #1–#29）
+
+| 上游# | 坑 | 本项目规避 |
+|---|---|---|
+| #2 | 拨弦/起音瞬间读数跳高八度 | 只在置信度达标时刷新显示；起音阶段显示「—」 |
+| #3 | 音名八度约定差异（中央 C 是 C4 还是 C3） | 全项目统一 SPN（中央 C = C4），界面不提供切换 |
+| #4 | 单帧误判拉高音域极值 | 极值仅在置信度达标且连续命中 ≥3 帧时更新 |
+| #5 | 用非贪婪正则从源码抽函数做离线验证 | 本项目用真实单测编译产物验证，不做源码抽取 |
+| #6 | 高音真实周期短于 τ 下限 → 报一半频率 | τ 起点取 `sr/F_MAX/2`；谷底落在起点上判无效 |
+| #7 | 帧长按"能装几个周期"估算 | 帧长/窗长按实测网格定，不靠周期数推导 |
+| #8 | 只用纯正弦做单测 | 测试信号同时覆盖纯音与含泛音信号 |
+| #9 | 用 `Math.round` 后的值反推索引做诊断 | 诊断打印原始值，不用中间推断值 |
+| #10 | 以为局域网 HTTP 就能用麦克风 | 桌面用 `localhost`；手机端权限与安全上下文需显式自检 |
+| #11 | PowerShell 5.1 按 ANSI 解析无 BOM 的含中文 `.ps1` | 含非 ASCII 的 `.ps1` 存 UTF-8 with BOM |
+| #13 | 以为传了约束就真关掉了 AGC/AEC/NS | 用实际生效值核对；未报告时按"可能未开"处理，并在调试界面显示 |
+| #14 | 把"读数抖动"当"算法不准" | 先区分系统性偏差（均值偏、标准差小）与抖动（均值准、标准差大） |
+| #15 | 调试时抽样画波形漏掉尖峰 | 波形每列取窗口内 min/max |
+| #16 | "多档窗长按置信度择优" | 已实测失败（置信度偏好长窗，恰是高音误差源）；用级联窗长按"τ 区间是否落在窗内"选 |
+| #17 | 用固定窗长测远超能力的高音 | 高音用短窗；或明确声明音域上限 |
+| #18 | 把用户素材当"已验证标准音源" | 先用结构约束（88 键连续半音）反推对应关系再比对 |
+| #19 | 单一窗长覆盖全键盘 | 级联窗长：取第一个"τ 区间完整落在窗内"（`tauMax < n/2`）的结果 |
+| #20 | 用 PowerShell `Get-Content`/`Set-Content` 回写含中文源码 | **改文件一律用编辑工具**；脚本产物走"数据文件 + 纯 ASCII 脚本" |
+| #21 | 只看包络就断言"高音端算法不准" | 先量包络（有多少可用稳态段），再判断误差归属 |
+| #22 | 同一算法在多文件各存一份副本 | 算法只有 `src/core/` 一份；QML 与控制器只调用 |
+| #23 | 用"取全局最小"/"前 N 个谷中最深者"当 YIN 判据 | 用规范"首个低于阈值的谷" + 严格的浅谷复核 |
+| #24 | 用"频谱最强峰"作基频精修判据 | 频域精修只做粗估 ±3% 的局部微调；八度归属由 τ 判据决定 |
+| #25 | 把"偏差大"等同于"识别错误" | 判定用音名正确性；偏差单独报告为调律特性；用泛音序列自洽性裁决 |
+| #26 | 判定只查音名 | 双条件：音名正确 **且** 偏差 < 50 音分 |
+| #27 | 用整段频率中位数代表音高 | 聚合用众数音名；参考频率用置信度加权中位数 |
+| #28 | 后处理改了频率却没重算派生字段 | 任何改频率的后处理之后必须重算音名/音分 |
+| #29 | 用几何平均做谐波敏感度 | 保留算术加权（低次泛音权重 `1/k`） |
+
+> #1（`file://` 无法用麦克风）、#12（自签证书 SAN 写死 IP）为浏览器专有，本项目形态下不适用，**不继承**。
+
+## 二、本项目特有（Qt / C++ 重写引入）
+
+| # | 坑 | 后果 | 规避 | 来源功能 |
+|---|---|---|---|---|
+| A1 | 把算法写进 QML 或控制器 | 界面与算法耦合，无法单测、无法复用；重蹈"算法三份副本"覆辙（上游 #22） | `qml/` 禁算法；算法只放 `src/core/`，纯标准库、可独立单测 | pitch-detector |
+| A2 | C++ 与 JS 用不同浮点精度（float vs double） | YIN 谷值判定在阈值边界翻转，同一音频两端结论不同 | 算法内部统一 `double`（对齐 JS Number）；仅采样数据用 `float` | pitch-detector |
+| A3 | 跨平台 QAudioFormat 不协商（采样率/声道/位深） | 同一设备在不同平台拿到不同格式，τ 换算错、判定漂移 | 采集前查询 `QMediaDevices` 支持格式并显式协商；实际格式写入日志与调试界面 | pitch-detector |
+| A4 | 假设 `QAudioSource` 每次回调给固定样点数 | 窗长/帧进按固定值写死后，窗内周期数不足，低音判错 | 按"可用样点环形缓冲"取帧，不假设回调粒度；帧进由缓冲逻辑保证 | pitch-detector |
+| A5 | Android 未申请录音权限 | 采集静默失败（Qt 6 部分版本不自动弹权限框） | Android 清单声明 `RECORD_AUDIO`，运行期检查并通过平台接口申明；失败显式报错 | pitch-detector |
+| A6 | 实时链路的尾延迟随窗长增长 | 用 16384 级联窗做实时，端到端延迟不可接受 | 实时链路窗长单独定，必须实测端到端延迟（`verify.md` 真机项） | pitch-detector |
+| A7 | 素材路径写死为相对路径 | 换机器/换目录后回归测试静默跳过，产生"假通过" | 素材以绝对路径配置项注入；路径不存在时测试 **FAIL**，不跳过 | pitch-detector |
+| A8 | 用编辑器/脚本批量改 `.ui`/`.qrc`/QML 时破坏编码 | 中文乱码、构建失败（同上游 #20 的 Qt 版本） | QML/C++ 源文件统一 UTF-8（无 BOM）；改文件走编辑工具 | pitch-detector |
+| A9 | 假设上游的测试素材还在原地 | **实测已发生**：`D:\dev_project\pitch-detector\resource_audio\`（88 键钢琴 WAV，128 MB）已不存在，全盘搜 `870f3-main` 无结果。它是上游 84/88 基线的唯一数据来源，缺失使 A1/A2/B2 无法执行——若直到交付前才发现，等于核心准确度指标从未验证 | ① 关键测试素材的**存在性**必须作为测试前置断言（缺失即 FAIL，不得静默跳过，配合 A7）② 不能用素材的项目要**提前声明替代口径**（本项目已补：合成素材逐帧对拍 + 88 键合成音阶矩阵）③ 素材属用户数据，长期方案是复制一份到本项目并纳入版本管理（体积大时用 Git LFS 或压缩包） | pitch-detector |
+| A10 | 跨语言对拍的真值用 JSON 存浮点 | `JSON.stringify` 丢末位（17 位有效数字不保证往返），而一致性判据要求相对差 ≤1e-6 → 出现"永远对不齐"的假失败，且无法区分"移植有偏差"与"序列化精度不够" | 逐帧数值用 **float64 原始字节**落盘；元数据用纯文本（机器读取的清单只放 ASCII，避免编码歧义） | pitch-detector |
+| A11 | 只对拍频率，不对拍音名 | 八度误判是上游的核心风险（#26：B0 报 +1195 音分却因标签正确被计为命中）；只比频率时"差一个八度"会表现为巨大相对差，但"标签碰巧对"的假命中反而看不出来 | 真值必须**补一列逐帧音名**（ASCII 文本列），对拍判定 = 数值在容差内 **且** 音名逐帧一致 | pitch-detector |
+| A12 | 在含中文的辅助脚本里用 PowerShell 7 专有参数（如 `Select-String -Recurse`） | **实测已发生**：本机只有 Windows PowerShell 5.1（无 `pwsh`），`-Recurse` 不存在 → 检查脚本直接抛错；更早一次是脚本里的中文被按 ANSI 解码，解析失败报"缺少字符串终止符"（**与上游 #11 同一根因**） | ① 机器读取/执行的脚本**只用 ASCII**（中文用 `[char]0xXXXX` 拼，或写到外部数据文件）② 只用 PS 5.1 与 PS 7 都有的参数（要递归就 `Get-ChildItem -Recurse \| Select-String`）③ 含非 ASCII 时**必须存 UTF-8 with BOM** | pitch-detector |
+| A13 | 写的检查脚本从未在"故意违规"的输入上试过 | 门禁脚本可能永远 PASS（正则写错、路径写错、异常被吞），给出虚假安全感——比没有门禁更危险 | 新增/修改门禁后必须做一次**负向验证**：构造一个真实违规 → 确认脚本 FAIL 并指出位置 → 清理探针。本项目 `tools/check-layering.ps1` 已按此验证（2026-09-28） | pitch-detector |
+| A14 | 用**纯正弦**在低音区（C2 / C#2，约 65–69 Hz）验证引擎，并期望它与上游一致 | **实测已发生**（88 键合成矩阵）：上游 JS 引擎把 C2 纯音判成 C1、C#2 纯音判成 C#1（低一个八度，中位偏差 0.0 音分）；同一音名**含泛音**的信号则全部判对。若把纯音当基准，会把上游的边缘行为误判成本项目 C++ 的移植错误，白查一整天 | ① 合成矩阵里必须**同时**保留纯音与含泛音两种信号，并分别统计命中 ② 对拍时"上游也判错的用例"要单独列出（`matrix88/report.md` 的未命中明细），**不得**计入 C++ 的失败 ③ 真实乐器素材（含丰富泛音）才是主要判据，纯正弦只能测算法骨架 | pitch-detector |
+| A15 | QML 单例只写 `pragma Singleton`，忘了在 CMake 里声明 `QT_QML_SINGLETON_TYPE` | **实测已发生**：整套界面里 `Theme.xxx` 全是 undefined，表现为刷屏的 `Unable to assign [undefined] to QColor` 与 `QFont::setPixelSize: Pixel size <= 0`——错误信息完全指不到真正原因 | 单例文件必须在 CMake 里显式声明；且 `set_source_files_properties(... QT_QML_SINGLETON_TYPE TRUE)` **必须写在 `qt_add_qml_module` 之前**，写在后面不生效（生成的 qmldir 里不会有 `singleton` 标记） | pitch-detector |
+| A16 | 用 `-DCMAKE_BUILD_TYPE=Debug` 构建 Qt 应用，然后 `windeployqt` 部署 | **实测已发生**：Qt 官方在线安装器**只装 release 库**（`Qt6Cored.dll` 等不存在），部署目录里 debug 版插件 DLL 加载失败 → QML 模块解析不到 → 界面起不来，而源码构建目录下一切正常，极易误判为"部署脚本的问题" | 交付/试运行一律用 **Release** 构建；调试用 Debug 时只从构建目录运行（不要部署） | pitch-detector |
+| A17 | 让 `windeployqt` 处理自定义 QML 模块 | `windeployqt` 只处理标准 Qt 模块；本项目的 `PitchDetector` 模块需要手工拷贝到 `<exe目录>/qml/PitchDetector/`。而且 qmldir 里 `linktarget` 指向的 `pitch-detector-ui` 是**静态库**，插件 DLL 却把它按共享库解析 → 部署目录下模块仍加载失败 | 短期：用启动器脚本设置 PATH 从构建目录运行（已提供 `run-app.bat`）；正式方案：用 `qt_deploy_qml_imports` 生成部署集，或把该模块改为共享库并纳入部署。**未解决前不要在文档里声称"部署可用"** | pitch-detector |
+| A18 | 在 QML 里复制算法参数（阈值、窗长、音域边界）用于显示 | **实测已发生**：调试页硬编码阈值 0.3、实时页硬编码"4096/16384"、更多页硬编码"27–4300 Hz"，被分层门禁逐条拦下。界面里的副本一旦与 C++ 不一致，用户看到的说明就是错的，且这类不一致极难发现 | 算法参数一律由 C++ 以只读属性暴露（如 `Session.yinThreshold` / `frameDescription` / `rangeDescription`），QML 只显示不定义 | pitch-detector |
+| A19 | 用 `Copy-Item -Recurse <dir> <dir>\<sub>` 复制目录 | **实测已发生**：源目录是目标目录的父目录，导致无限自我复制，短时间生成 9 万+ 项嵌套目录（清理花了 23 s）。这类命令还会把磁盘写满 | 复制到子目录前先确认目标不在源目录内；大批量清理优先 `cmd /c rmdir /s /q`（比 `Remove-Item -Recurse` 对深层嵌套稳健得多） | pitch-detector |
+| A20 | 用 PowerShell 的 `Set-Content -Encoding UTF8` 改写 `.pro` / `.qrc` | **实测已发生**：该写法在 Windows PowerShell 5.1 下会写入 **BOM**；带 BOM 的 `.pro` 会让 qmake **静默忽略文件开头的一批赋值**——表现为"`QMAKE_CXXFLAGS += -std=c++20` 明明写了，Makefile 里却没有"，而报错信息是 `std::span is not a member of std`、`-'pitch-io' not found` 这类完全指不到根因的现象，排查耗时很长 | 改 `.pro`/`.qrc` 一律用编辑工具，或用 `[System.IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($false)))`；改完用前 3 字节自查是否 `EF BB BF` | pitch-detector |
+| A21 | 以为"qmake 用 qrc 提供 QML 模块"能像 `qt_add_qml_module` 一样解析模块内的命名类型与单例 | **实测已发生**：把 `qml/`（含手写 qmldir，声明了 `singleton Theme`）编进 qrc、并 `addImportPath(":/")` 后，界面**能创建**，但整份 QML 对 `Theme` 的引用全部报 `ReferenceError: Theme is not defined`（230 行），`Main.qml` 里 `import PitchDetector` 也无效。同一套 qmldir 写法在 CMake 的 `qt_add_qml_module` 下是正常的（后者会生成模块插件并注册类型表） | 需要"跨文件按名访问"的类型不要依赖 qmldir 的模块类型表，改为 **C++ 单例 + `qmlRegisterSingletonInstance`**（本项目 `Theme` 已如此改造，与 `Session`/`FileAnalysis` 走同一条已验证可用的路径）。qml 文件之间仍可用**相对导入**（`import "../components"`）访问组件 | pitch-detector |
+| A22 | 改了 `.pro` 的内容（不增删源文件）后只重新构建，期望改动生效 | **实测已发生**：qmake 生成子工程 Makefile 时用 `-incremental`，不会重读 `.pro`；即使跑 `jom` 也不会重新生成子 Makefile，于是改动**静默不生效**（同一现象让"标志没进 Makefile"的问题多耗了一轮排查） | 改 `.pro` 后**显式重新 qmake**（`qmake <root>.pro CONFIG+=release`，或对子工程直接 `qmake src/app/app.pro`）；怀疑 Makefile 陈旧时，删掉生成的 `Makefile*` 再重新 qmake | pitch-detector |
+| A23 | 照 Qt 5 的记忆写 `QAudioFormat::Int8` | **实测已发生**：Qt 6 的 `QAudioFormat` **只有 `UInt8`**（Int8 已移除），编译直接报 `'Int8' is not a member of 'QAudioFormat'` | Qt 6 的样点格式只有 `UInt8 / Int16 / Int32 / Float`；改格式分派前先查 Qt 6 头文件，不要凭 Qt 5 经验写 |
+| A24 | 以为 `windeployqt` 会把 Qt Multimedia 一起部署 | **实测已发生**：`windeployqt` 只按可执行文件的**直接依赖**推断，而 Multimedia 是运行期按需加载的插件式后端 → 部署目录缺 `Qt6Multimedia.dll` 与 `plugins\multimedia\*.dll`，表现为"源码目录能跑、部署后麦克风不见了" | 部署时手工补齐 `Qt6Multimedia.dll`、`Qt6Network.dll`、`Qt6MultimediaQuick.dll` 与 `plugins\multimedia\*.dll`；`build-and-run.bat` 已内置该步骤 |
+| A25 | 以为 qmake subdirs 里某个子工程写的 `DEFINES` 会传给其它子工程 | **实测已发生**：`src/audio/audio.pro` 里判定出 `PITCH_HAVE_QT_MULTIMEDIA=1`，但 `src/app` 编译时该宏仍是 `0`（各子工程相互独立，`DEFINES` 不沿库依赖传递），于是 `--devices` 报"构建时未包含 Qt Multimedia" | 依赖同一判定的子工程各自写一遍 `qtHaveModule(...)`；不要假设 qmake 的 subdirs 会联动变量 |
+| A26 | 装完 Qt 组件后直接重新构建，不重新 qmake | `qtHaveModule(multimedia)` 之类的判定在 **qmake 阶段**求值；不重跑 qmake 时，新增模块不会被纳入（本项目 `src/audio` 需单独重新 qmake 才发现 Multimedia） | 装/删 Qt 组件后：**重新 qmake → 再构建**；必要时删掉 `Makefile*` 强制全量重生成 |
+| A27 | 程序还在运行时重新构建（Windows） | **实测已发生**：链接器报 `cannot open output file ..\..\bin\pitch-detector-APP.exe: Permission denied`，看起来像权限或杀软问题，实际是运行中的 exe 被系统锁住 | 构建前先结束运行中的实例（`taskkill /IM pitch-detector-APP.exe /F`）；`build-and-run.bat` 已在最前面加这一步。排查时先 `Get-Process <exe名>` 看有没有残留进程（GUI 关闭后也偶发残留） |
+| A28 | 编译宏（`DEFINES`）变了却只做增量构建，或手工删掉了某个工程的 `obj/` | **实测已发生**：`PITCH_HAVE_QT_MULTIMEDIA` 从 0 变 1、Makefile 里也确认是 `=1`，但旧目标文件未重编，可执行文件里仍是 0（`--devices` 报"构建时未包含 Qt Multimedia"）；而手工只删 `src/app/obj` 又会让 jom 的过期判断错乱（报 `qrc_qml.o` 等 Error 1） | ① **改 `DEFINES` / `INCLUDEPATH` / `QMAKE_CXXFLAGS` 后必须全量重编**，不要依赖增量 ② 要清理就**整体清理**（删掉全部 `Makefile*` 与 `obj/`、`moc/`、`rcc/` 后重新 qmake），不要手删单个工程的部分中间产物 ③ 判定"宏是否真的进了二进制"要用运行期自检（如 `--devices`），不能只看 Makefile |
+| A29 | 在 Windows 上处理**含中文的路径**（本项目素材目录名就是中文） | **实测已发生，连踩三层**：① `QString::toStdString()` 按本地代码页转 8 位窄字符，窄字符 `ifstream` 打不开这种路径（报"无法打开文件"）；② `std::filesystem` 的窄字符接口**直接抛异常** `Cannot convert character sequence: Illegal byte sequence`；③ Windows 传给 `main` 的 `argv` 是**本地 ANSI（GBK）**编码，程序当 UTF-8 解析得到乱码，报"目录不存在"。三者现象各异，很容易误判成文件损坏或算法问题 | ① **首选：路径不要用非 ASCII**（本轮最终就是把素材目录改名为 `D:\piano88`）——最省事、最彻底 ② 必须支持时：文件访问用宽字符 API（`CreateFileW`/`GetCommandLineW`+`CommandLineToArgvW`），目录枚举用 `FindFirstFileW` 而非 `std::filesystem` ③ 读文件优先"整读入内存 + 复用同一解析器"，**不要**把 `FILE*` 包成自定义 `streambuf`（`tellg/seekg/gcount` 语义极易出偏差，表现为"缺少 fmt 块"，与真正的格式错误无法区分） ④ 命令行工具要把"读文件失败"与"解析无结果"分开报，否则无法定位 |
+| A30 | 创建了采集源却没**连接它的信号**就 start | **实测已发生，且是本轮最耗时的一个**：`PitchSessionController` 两处 `make_unique<...AudioSource>()` 之后只调用了 `start()`，漏了 `connect(samplesReady/...)`。现象极具误导性——状态显示"正在监听"、采集层的计数器正常增长（轮询 363 次、152 万字节、非零样点 76%），但**会话层回调次数恒为 0**、读数永远为空，看起来像"麦克风没声音"或"算法不工作" | ① 所有采集源统一经一个 `adoptSource()` 接入，信号只在该方法里连接一次（漏连不可能再发生） ② **加"回调次数"诊断计数器**：采集层有数据而会话层回调为 0 = 信号没连上，这个判断一步到位 ③ 推拉模型要选对：`QAudioSource` 的 `QIODevice` 是**拉取**模型，必须主动 `read()`（只连 `readyRead` 也收不到数据），且 `connect` 要写在 `start()` 之前 |
+| A31 | 用 QML 的 `FileDialog` 选文件并把 `selectedFile` 传给 C++ | **实测已发生**（用户报"选择音频导入提示无法载入音频文件"）：QML `FileDialog` 在 Windows 上返回的路径不可靠，C++ 侧收到后打不开文件 | 文件选择改用 **C++ 侧 `QFileDialog::getOpenFileName`**（原生对话框、返回本地路径、行为确定），QML 只调用一个 `Q_INVOKABLE` 方法。代价是要链接 `Qt6::Widgets`（只用 QFileDialog 一个类，不引入任何 QWidget 界面） |

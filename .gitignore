@@ -1,0 +1,106 @@
+# ============================================================================
+# .gitignore —— 只跟踪"人写的源码与文档"，一切可自动生成的一律忽略
+#
+# 判据（R4）：
+#   能由**命令重新生成**的东西 → 不进版本库（否则每次构建都产生噪音改动）
+#   人写的、决定行为的、需要回溯历史的 → 进版本库
+#
+# 本项目的生成链条：
+#   qmake/jom        → Makefile*、.qmake.stash、obj/、moc/、rcc/、bin/、lib/、debug/、release/
+#   windeployqt      → run/（约 93 MB）
+#   node tools/gen-*.mjs → tests/data/ 全部内容（素材、二进制真值、清单、报告）
+#   piano-batch      → reports/（报告与 CSV）
+# ============================================================================
+
+# ---------- qmake 生成的工程文件 ----------
+.qmake.stash
+Makefile
+Makefile.*
+*.pro.user
+*.pro.user.*
+.qmake.cache
+qmake_*.mk
+
+# ---------- 构建中间产物与输出 ----------
+obj/
+moc/
+rcc/
+ui/
+debug/
+release/
+bin/
+lib/
+*.o
+*.obj
+*.a
+*.lib
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+*.ilk
+*.exp
+*.map
+
+# ---------- Qt 自动生成代码 ----------
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.moc
+qmltypes/
+
+# ---------- 部署产物 ----------
+# windeployqt 的输出：Qt 运行库 + QML 模块 + 插件，约 93 MB，可由命令重建
+run/
+dist/
+deploy/
+*.qm
+
+# ---------- 测试数据（全部由脚本生成） ----------
+# `node tools/gen-test-fixtures.mjs` 与 `node tools/gen-88key-matrix.mjs` 的产物：
+#   *.wav            合成素材
+#   *.f64            逐帧二进制真值（浮点原始字节）
+#   *.note           逐帧音名真值
+#   reference.txt / reference.json   真值清单
+#   matrix88/        88 键矩阵真值（354 个文件）
+#   report.md        JS 引擎自检报告
+# 真值入不入库的取舍：入过库，但它是**可再生的构建输入**，与源码的区别在于
+# 不需要人工回溯历史版本——重跑脚本即可得到完全相同的字节（脚本是确定性的）。
+# 因此整个目录都忽略；需要复现验收时先跑一次生成脚本（AGENTS.md 有命令）。
+tests/data/
+tests/data-reports/
+
+# ---------- 生成的报告与日志 ----------
+# piano-batch / cross-check / core-tests 的输出产物
+reports/
+*.log
+*.err
+
+# ---------- 素材（用户数据，放仓库外） ----------
+resource_audio/
+
+# ---------- IDE / 编辑器 ----------
+.qtcreator/
+.qtc_clangd/
+.vscode/
+.idea/
+*.autosave
+*~
+
+# ---------- 构建系统残留（旧 CMake 时代的规则，保留以防误加） ----------
+build/
+build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+out/
+
+# ---------- 系统 ----------
+Thumbs.db
+desktop.ini
+.DS_Store

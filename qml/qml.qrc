@@ -1,0 +1,33 @@
+<!DOCTYPE RCC>
+<!--
+  QML 资源清单（qmake 方案）
+
+  把 qml/ 目录按 /PitchDetector 前缀编进可执行文件，资源内布局：
+      :/PitchDetector/qmldir
+      :/PitchDetector/Main.qml
+      :/PitchDetector/components/...
+      :/PitchDetector/pages/...
+
+  main.cpp 里 addImportPath(":/") + loadFromModule("PitchDetector", "Main")。
+
+  注意：qmake 不会自动生成 qmldir（那是 CMake 的 qt_add_qml_module 才做的事），
+  qml/qmldir 由本工程手工维护，新增 QML 文件时必须在这里与 qmldir 中同步登记。
+-->
+<RCC>
+    <qresource prefix="/PitchDetector">
+        <file>qmldir</file>
+        <file>Main.qml</file>
+        <file>components/BottomNavBar.qml</file>
+        <file>components/CentsBar.qml</file>
+        <file>components/LevelMeter.qml</file>
+        <file>components/NoteDisplay.qml</file>
+        <file>components/PageHeader.qml</file>
+        <file>components/PitchCurve.qml</file>
+        <file>components/StatCard.qml</file>
+        <file>pages/DebugPage.qml</file>
+        <file>pages/FilePage.qml</file>
+        <file>pages/LivePage.qml</file>
+        <file>pages/MorePage.qml</file>
+        <file>pages/RangePage.qml</file>
+    </qresource>
+</RCC>

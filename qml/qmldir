@@ -1,0 +1,35 @@
+# QML 模块声明（手写：qmake 没有 qt_add_qml_module，不会自动生成）
+#
+# 位置：与 qml.qrc 的 /PitchDetector 前缀对应，资源内路径为 :/PitchDetector/qmldir。
+#
+# 重要限制（实测）：本工程用 qmake 时，**本文件的命名类型不会被解析**。
+#   现象：界面能被创建，但整份 QML 里对 Theme / 组件名的引用报 ReferenceError（230 行）。
+#   同样的写法在 CMake 的 qt_add_qml_module 下正常——差异在于后者会生成模块插件并注册类型表。
+#   因此本项目把需要"跨文件按名访问"的类型（Theme）改为 **C++ 单例**，
+#   经 qmlRegisterSingletonInstance 注册（见 src/app/theme.h 与 main.cpp），
+#   与 Session / FileAnalysis 走同一条已验证可用的路径。
+#
+# 本文件保留的作用：
+#   ① 声明模块名与资源基准（prefer），便于将来改用 qt_add_qml_module 时平滑迁移
+#   ② 记录各 QML 文件的位置与用途（新增文件时同步登记）
+#
+# 编码要求：UTF-8 **无 BOM**（带 BOM 时解析行为异常，见坑 A20）。
+
+module PitchDetector
+prefer :/PitchDetector/
+
+Main 1.0 Main.qml
+
+BottomNavBar 1.0 components/BottomNavBar.qml
+CentsBar 1.0 components/CentsBar.qml
+LevelMeter 1.0 components/LevelMeter.qml
+NoteDisplay 1.0 components/NoteDisplay.qml
+PageHeader 1.0 components/PageHeader.qml
+PitchCurve 1.0 components/PitchCurve.qml
+StatCard 1.0 components/StatCard.qml
+
+DebugPage 1.0 pages/DebugPage.qml
+FilePage 1.0 pages/FilePage.qml
+LivePage 1.0 pages/LivePage.qml
+MorePage 1.0 pages/MorePage.qml
+RangePage 1.0 pages/RangePage.qml
