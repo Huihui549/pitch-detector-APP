@@ -8,10 +8,10 @@
 
 | 项 | 值 |
 |---|---|
-| 上游项目 | `[PC] D:\dev_project\pitch-detector`（网页版，**只读**，1 个提交 `9cb3830`） |
-| 上游算法真值 | `[PC] D:\dev_project\pitch-detector\tools\pitch-engine.js`（UMD，浏览器 + Node 双环境） |
+| 上游项目 | `[PC] <兄弟目录>/pitch-detector-web`（网页版，**只读**，1 个提交 `9cb3830`） |
+| 上游算法真值 | `[上游] tools/pitch-engine.js`（UMD，浏览器 + Node 双环境） |
 | 上游准确度基线 | 钢琴 88 键命中 **84/88（95.5%）**，命中键偏差中位 6.1 音分 |
-| 上游素材 | **已缺失**（2026-09-28 实测：`resource_audio/` 目录不存在）：原为 88 个钢琴 WAV（9.0 s / 2ch / 16bit / 44.1 kHz），文件名即标准答案。缺失使 84/88 基线暂时无法复现，替代口径见 `features/pitch-detector/verify.md` A1'/A2' 与坑 A9 |
+| 上游素材 | **本机实际存在**（2026-09-30 复核）：`[上游] resource_audio/870f3-main/钢琴88键独立音频文件/`，88 个 WAV（9.0 s / 2ch / 16bit / 44.1 kHz），文件名即标准答案。注意：早期记录曾误判为"已缺失"（见坑 A9 已更正） |
 
 ## 技术栈（目标形态）
 

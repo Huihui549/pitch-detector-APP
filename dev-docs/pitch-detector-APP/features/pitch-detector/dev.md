@@ -6,14 +6,14 @@
 ## 单元 0：项目骨架与文档（开发前准备）
 
 - **目标**：在写任何代码前，把项目边界、算法真值、验收口径与坑固化下来，避免凭记忆重写（R2/R6）。
-- **改动**：新建 `D:\dev_project\pitch-detector-APP\`，含 `AGENTS.md`、`.gitignore`、目录骨架（`src/{core,audio,io,app}`、`qml/{pages,components}`、`tests/data`、`tools`）、`dev-docs/pitch-detector-APP/{context.md,pitfalls.md,adr/0001-架构与选型.md,design/architecture.md,features/pitch-detector/{spec.md,verify.md,dev.md}}`。
+- **改动**：新建 `<repo>\`，含 `AGENTS.md`、`.gitignore`、目录骨架（`src/{core,audio,io,app}`、`qml/{pages,components}`、`tests/data`、`tools`）、`dev-docs/pitch-detector-APP/{context.md,pitfalls.md,adr/0001-架构与选型.md,design/architecture.md,features/pitch-detector/{spec.md,verify.md,dev.md}}`。
 - **事实（全部实测或上游实证）**：
-  1. 上游项目 `[PC] D:\dev_project\pitch-detector` 是 git 仓库（`git rev-parse --show-toplevel` = `D:/dev_project/pitch-detector`），当前工作区**干净**，仅 1 个提交 `9cb3830 feat: 音高检测工具首版（单音识别 84/88）`，**只读参考，本次未改动其任何文件**。
+  1. 上游项目 `[PC] [上游]` 是 git 仓库（`git rev-parse --show-toplevel` = `[上游]`），当前工作区**干净**，仅 1 个提交 `9cb3830 feat: 音高检测工具首版（单音识别 84/88）`，**只读参考，本次未改动其任何文件**。
   2. 上游算法真值文件 `tools/pitch-engine.js` 共 492 行，已全文读取；关键常数：`A4=440`、`F_MIN=27`、`F_MAX=4300`、`FRAME_LADDER=[1024,2048,4096,8192,16384]`、`YIN_THRESHOLD=0.3`、`RMS_MIN=0.008`、`RMS_REL_MIN=0.02`、`REFINE_MIN_HZ=500`、`REFINE_STEPS=240`、`REFINE_SPAN=0.03`、`HARMONIC_MAX=8`、`SUBHARMONIC_MIN_HZ=40`、改判倍数 `1.15`、`SHALLOW=0.15`。
   3. 上游引擎使用**模块级静态缓冲**（`yinD`/`cmndBuf`/`workBuf`，按最大窗长预分配）与"最近一次中间量"（`lastCmnd`/`lastTauMin`/`lastTauMax`）——C++ 侧改为显式传入缓冲以保证可重入，语义等价（记入 `design/architecture.md` 3.1）。
-  4. 环境实测（2026-09-28）：`D:\Qt` 目录**存在但为空**；`qmake`/`qtpaths`/`g++`/`cl`/`cmake`/`ninja` 均不在 PATH；未检出 Visual Studio 安装目录。→ Qt 安装仍在进行，构建与测试命令**尚不可执行**。
-  5. 本仓库 `D:\dev_project\pitch-detector-APP` 为**新目录**，不在任何既有 git 仓库内；按 R4「无 git 仓库禁止修改，先询问用户是否初始化」，已取得用户授权后执行 `git init`，仓库根确认为 `D:/dev_project/pitch-detector-APP`。
-  6. 上游 `AGENTS.md` 记载的规则库路径为 `D:\HKProject\KH800S\ai-rules`，本机实测**不存在**；实际存在 `D:\dev_doc\ai-rules`（本次会话已读取）与 `D:\dev_project\ai-rules`。已在本项目 `AGENTS.md` 中定为准 `D:\dev_doc\ai-rules`。
+  4. 环境实测（2026-09-28）：`<QtRoot>` 目录**存在但为空**；`qmake`/`qtpaths`/`g++`/`cl`/`cmake`/`ninja` 均不在 PATH；未检出 Visual Studio 安装目录。→ Qt 安装仍在进行，构建与测试命令**尚不可执行**。
+  5. 本仓库 `<repo>` 为**新目录**，不在任何既有 git 仓库内；按 R4「无 git 仓库禁止修改，先询问用户是否初始化」，已取得用户授权后执行 `git init`，仓库根确认为 `<repo>`。
+  6. 上游 `AGENTS.md` 记载的规则库路径（`<rules-repo>`，跨项目通用、不在本仓库内）在本机实测**不存在**；实际存在 `<rules-repo>`（本次会话已读取）。已在本项目 `AGENTS.md` 中定为准 `<rules-repo>`。注意：规则库路径本身是机器相关的，因此**不写进仓库**，见坑 A32。
 - **验证**：`git rev-parse --show-toplevel` 返回新仓库根；`git status --short` 可见全部新增文件为未跟踪状态；上游 `git status --short` 为空（未被污染）。
 - **依赖**：无。
 
@@ -28,7 +28,7 @@
   3. 上游 `preferFundamental` 里的分频下限用的是**模块常量 `F_MIN`（27 Hz）**，不是 `detectPitch` 的参数 `fMin`。C++ 侧保持同一行为（用 `kDefaultFMin`），并在代码注释中标注：若将来要为窄音域调用方收紧，必须同步改上游并重跑对拍。
   4. 上游 `magAtLut` 的相位增量取整（`Math.round(freq/sr*1024) || 1`）与 `idx & 1023` 查表是本实现必须保留的细节——为对齐数值，C++ 侧同样用整数索引查表，而非改用连续相位三角函数。
   5. `M_PI` 是 POSIX 扩展（MSVC 需 `_USE_MATH_DEFINES`），已改为项目内 `constexpr double kPi`，避免跨编译器陷阱。
-- **验证结果**：**未编译、未运行**。本机无任何 C++ 编译器（实测 `g++`/`clang++`/`cl` 全部缺失，无 MinGW/MSVC），Qt 也仍在安装（`D:\Qt` 为空）。→ `verify.md` 的 C1–C3 与全部 A/B 组项保持"未开始"，**不得视为通过（R2）**。
+- **验证结果**：**未编译、未运行**。本机无任何 C++ 编译器（实测 `g++`/`clang++`/`cl` 全部缺失，无 MinGW/MSVC），Qt 也仍在安装（`<QtRoot>` 为空）。→ `verify.md` 的 C1–C3 与全部 A/B 组项保持"未开始"，**不得视为通过（R2）**。
 - **依赖**：单元 0。
 
 ## 单元 2：测试素材与跨语言对拍真值（Node 侧完成，**不需要 C++ 编译器**）
@@ -39,7 +39,7 @@
   - 新增 `tools/cross-check.h/.cpp/-main.cpp`（C++ 对拍工具，含真值读取、逐帧比对与报告）。
   - 新增 `src/io/{wav-reader,realtime-runner}.h/.cpp`（WAV 读取与实时链路逐帧分析）与 `src/io/CMakeLists.txt`、`tools/CMakeLists.txt`；顶层 CMake 接入 `src/io` 与工具目标。
 - **事实（本轮实测，全部来自跑通的命令）**：
-  1. **上游 88 键钢琴素材已不存在**：`D:\dev_project\pitch-detector\resource_audio\` 目录缺失，全盘搜 `870f3-main` 无结果。该素材是上游 84/88 基线的唯一数据来源，故 spec 的 A1/A2 与 verify 的 B2 **暂时无法执行**（详见坑 A9）。
+  1. **上游 88 键钢琴素材已不存在**：`[上游]\resource_audio\` 目录缺失，全盘搜 `870f3-main` 无结果。该素材是上游 84/88 基线的唯一数据来源，故 spec 的 A1/A2 与 verify 的 B2 **暂时无法执行**（详见坑 A9）。
   2. 4 个合成素材全部通过自检（音名正确 **且** 偏差 < 50 音分，双条件）：A4 纯音中位 **440.0175 Hz（+0.07 音分）**、A3 纯音 220.0009 Hz（+0.01）、A3 含 2/3/4 次泛音 220.001 Hz（+0.01）、静音 0 帧。A4 的 +0.07 音分与上游 `AGENTS.md` 记录的 "+0.1 音分" 吻合，说明真值链路正确。
   3. 逐帧真值规模：每个有声音素材 **文件分析 263 帧**（帧进 441）、**实时 251 帧**（窗 4096、帧进 512）。
   4. **真值不能存 JSON**：`JSON.stringify` 会丢浮点末位，而 B1 要求相对差 ≤1e-6，用 JSON 当基准会出现"永远对不齐"的假失败。故逐帧数值改为 **float64 原始字节**落盘（64 B/帧 / 48 B/帧），元数据用纯文本 `reference.txt`，C++ 侧无需引任何 JSON 库。
@@ -50,7 +50,7 @@
 - **验证结果**：
   - `node tools/gen-test-fixtures.mjs` → **自检失败项 0**，产出 4 个 WAV + 8 个真值文件 + 清单（可重复执行，结果确定）。
   - `powershell -ExecutionPolicy Bypass -File tools/check-layering.ps1` → **三项全 PASS**（core 零 Qt、qml 零算法、算法定义唯一），并做过负向验证（构造 `fMax: 4300` 的 qml 探针 → 脚本 FAIL 并报出 `_gate_probe.qml:2`，探针已删除）。
-  - C++ 侧 `cross-check` 工具**尚未编译**（本机仍无任何 C++ 编译器，Qt 安装在 `D:\Qt` 仍为空）→ B1/B2/B3 状态保持"未开始"，**不得视为通过（R2）**。
+  - C++ 侧 `cross-check` 工具**尚未编译**（本机仍无任何 C++ 编译器，Qt 安装在 `<QtRoot>` 仍为空）→ B1/B2/B3 状态保持"未开始"，**不得视为通过（R2）**。
 - **依赖**：单元 1。
 
 ## 单元 3：分层门禁脚本（工具，已验证）
@@ -103,7 +103,7 @@
   - `qml/`：`Main.qml`（单页 + 底部导航 + 隐藏调试入口）、`Theme.qml`（单例配色）、`components/`（NoteDisplay / CentsBar / PitchCurve / LevelMeter / StatCard / PageHeader / BottomNavBar）、`pages/`（LivePage / FilePage / RangePage / MorePage / DebugPage）、`CMakeLists.txt`
   - `run-app.bat`（一键运行启动器）
 - **事实（全部实测，含踩坑）**：
-  1. **Qt Multimedia 未安装**（`D:\Qt\6.8.3\mingw_64\lib\cmake` 下无该模块，只有它的翻译文件）→ `QAudioSource` 不可用。
+  1. **Qt Multimedia 未安装**（`<QtRoot>\6.8.3\mingw_64\lib\cmake` 下无该模块，只有它的翻译文件）→ `QAudioSource` 不可用。
      处置：采集层条件编译该实现；实时页显式提示"未安装 Multimedia，请用 MaintenanceTool 勾选"，并提供**文件回放**作为替代验证手段（`FileAudioSource`）。补装后无需改结构。
   2. **编译器必须用 Qt 自带的 MinGW 13.1.0**：先用 WinLibs MinGW 16.2（UCRT）编译，运行期崩在 `QString::toStdString()` 的 `RtlFreeHeap`（gdb 给出 backtrace），属跨运行时堆不一致。换 Qt 的 MinGW 后消失。
   3. **C++ 标准 C++20**（ADR-0008）：首次编译报 `std::span is only available from C++20 onwards`。
@@ -150,7 +150,7 @@
      同一 qmldir 写法在 CMake 的 `qt_add_qml_module` 下正常（后者生成插件并注册类型表）。
      **处置：Theme 改为 C++ 单例**（`src/app/theme.h` + `qmlRegisterSingletonInstance`），此后零 QML 报错。
   5. **`LIBS` 的相对路径按 `.pro` 所在目录解析**：`tools/cross-check.pro` 里写 `$$PWD/../../lib`（多一级）会解析到
-     `D:\dev_project\lib`，链接时报 `cannot find -lpitch-io`。改为 `$$PWD/../lib`。
+     `<父目录>\lib`，链接时报 `cannot find -lpitch-io`。改为 `$$PWD/../lib`。
   6. **`-Wconversion` 在 Qt 头文件里是噪声**（`qpoint.h`、`qtyperevision.h` 等大量 int→float/quint8 收窄告警）：
      app / audio 两个工程去掉该开关，core / io（不含 Qt 头）保留严格口径。
   7. **qmake 构型带来一个额外收益**：QML 与手写 qmldir 一起编进 exe 资源，**windeployqt 部署后孤岛运行成功**
@@ -176,7 +176,7 @@
   - `build-and-run.bat`：部署步骤补上 windeployqt 不会自动处理的 Multimedia 运行库与插件
 - **事实（全部实测）**：
   1. **装法（可复现）**：
-     `D:\Qt\MaintenanceTool.exe install qt.qt6.683.addons.qtmultimedia --root D:\Qt --accept-licenses --accept-obligations --accept-messages --confirm-command`
+     `<QtRoot>\MaintenanceTool.exe install qt.qt6.683.addons.qtmultimedia --root <QtRoot> --accept-licenses --accept-obligations --accept-messages --confirm-command`
      —— 注意 `--accept-messages` 与 `--default-answer` **互斥**（同时给会直接报错退出）。
      本次装入了 mingw_64 / android_arm64_v8a / wasm_multithread 三条链 + 文档 + 示例。
   2. **装完必须重新 qmake**：`qtHaveModule(multimedia)` 在 qmake 阶段求值（坑 A26）。
@@ -219,7 +219,7 @@
      ① `QString::toStdString()` 按本地代码页转 8 位窄字符 → 窄字符 `ifstream` 打不开；
      ② `std::filesystem` 的窄字符接口在中文路径上**直接抛异常**（`Cannot convert character sequence`）；
      ③ Windows 传给 `main` 的 `argv` 是**本地 ANSI 编码**（GBK），当 UTF-8 解析得到乱码 → 报"目录不存在"。
-     **最终处置（用户建议，正确且彻底）**：把目录改名为英文短名 `D:\piano88`，
+     **最终处置（用户建议，正确且彻底）**：把目录改名为英文短名（`<素材目录>`，纯 ASCII），
      同时代码侧保留宽字符能力（`readWavMonoW` 用 Windows 原生 `CreateFileW`/`ReadFile` 整读入内存后交给同一解析器；
      `piano-batch` 用 `GetCommandLineW` + `CommandLineToArgvW` 取宽字符参数）。
   3. **自定义 streambuf 是个坑**（中途走过弯路）：曾把 `FILE*` 包成 `streambuf` 供 `istream` 用，
@@ -229,7 +229,7 @@
   4. **`piano-batch` 的进度必须打 stderr**：stdout 重定向到文件时是全缓冲的，后台跑数分钟日志仍 0 字节，
      误以为卡死（实测踩过）。
 - **验证结果（A1/A2 达成）**：
-  - `bin\piano-batch.exe --dir D:\piano88 --csv ... --md ...` → **命中 84 / 88（95.5%）**、
+  - `bin\piano-batch.exe --dir <素材目录> --csv ... --md ...` → **命中 84 / 88（95.5%）**、
     **命中键偏差中位 6.3 音分**、**含多个音名的文件 36 个**、耗时 444.5 s
   - **与上游 JS 基线逐项吻合**（上游：84/88、偏差中位 6.1 音分、混合音名 36 个）
   - **未命中的正是上游记录的那 4 个键**：`#2 A#0`（众数 F2）、`#3 B0`（众数 B1）、`#36 G#3`（众数 G#4）、
@@ -287,4 +287,4 @@
 | 待用户拍板 6 项 | 见 `spec.md` 第四节与 `design/architecture.md` 第六节 |
 | 环境未就绪 | Qt 安装中；构建/测试命令未实测，`AGENTS.md` 相关表格待回填 |
 | 上游实时链路从未验证 | 上游 `verify.md` 的 C1–C7、V1–V8、M3–M7 全部为"待验"；本项目计划用 `FileAudioSource` 把实时逻辑做成可自动回归 |
-| `D:\qt` 空目录 | 会话开始时的工作目录，用户已确认真实项目在 `D:\dev_project`；该空目录**未做任何操作**，由用户决定是否删除 |
+| 会话开始时的空目录 | 会话开始时的工作目录是一个空目录，用户已确认真实项目在别处；该空目录**未做任何操作**，由用户决定是否删除（具体路径不写进仓库，见坑 A32） |

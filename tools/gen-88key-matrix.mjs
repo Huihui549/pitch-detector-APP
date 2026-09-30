@@ -28,22 +28,20 @@
  */
 
 import { createRequire } from "node:module";
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { getUpstreamEngine } from "./_path-policy.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
 const OUT_DIR = join(REPO, "tests", "data", "matrix88");
 
-const UPSTREAM_ENGINE = "D:/dev_project/pitch-detector/tools/pitch-engine.js";
-if (!existsSync(UPSTREAM_ENGINE)) {
-  console.error(`[FAIL] 找不到上游引擎（算法真值的唯一来源）：${UPSTREAM_ENGINE}`);
-  console.error("      缺失时不得静默跳过（pitfalls A7/A9）。");
-  process.exit(1);
-}
-const Engine = require(UPSTREAM_ENGINE);
+// 上游引擎路径由 tools/_path-policy.mjs 解析（PITCH_WEB_ROOT 优先，其次向上找兄弟目录），
+// 缺失时它已直接抛错，故此处不再重复判空。
+const Engine = require(getUpstreamEngine());
 
 /* ============================ 信号与真值 ============================ */
 

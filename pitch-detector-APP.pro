@@ -4,9 +4,9 @@
 # 工具链：Qt 6.8.3 自带 MinGW 13.1.0（**必须用 Qt 自带的那个**：用其它 MinGW 会因
 #         运行库堆不一致而在 QString::toStdString 处崩溃，见坑 A16）。
 #
-# 构建（[PC] 本目录）：
-#   D:\Qt\6.8.3\mingw_64\bin\qmake.exe pitch-detector-APP.pro CONFIG+=release
-#   D:\Qt\Tools\QtCreator\bin\jom\jom.exe            (或 mingw32-make.exe)
+# 构建（[PC] 本目录；<QtRoot> = Qt 安装根目录，见 AGENTS.md「环境与路径约定」）：
+#   <QtRoot>/6.8.3/mingw_64/bin/qmake.exe pitch-detector-APP.pro CONFIG+=release
+#   <QtRoot>/Tools/QtCreator/bin/jom/jom.exe            (或 mingw32-make.exe)
 # 运行：
 #   双击 run-app.bat
 #

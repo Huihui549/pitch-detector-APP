@@ -33,7 +33,7 @@ INCLUDEPATH += $$PWD/../core $$PWD/../io
 LIBS += -L$$PWD/../../lib -lpitch-io -lpitch-core -lm
 
 # Qt Multimedia 存在时，才把真实麦克风实现编进来。
-# 补装方式：D:\Qt\MaintenanceTool.exe 勾选 Qt Multimedia 后重新 qmake + 构建。
+# 补装方式：用 Qt 安装目录下的 MaintenanceTool 勾选 Qt Multimedia 后重新 qmake + 构建。
 qtHaveModule(multimedia) {
     message("audio: Qt Multimedia available -> building QtAudioSource (microphone)")
     QT += multimedia
@@ -43,7 +43,7 @@ qtHaveModule(multimedia) {
 } else {
     # 提示保持纯 ASCII：qmake 的 message/warning 在 Windows 控制台按本地代码页输出，
     # 中文会显示成乱码（实测），反而看不清关键信息。
-    warning("audio: Qt Multimedia NOT installed -> QtAudioSource skipped. Microphone disabled; FileAudioSource (WAV playback) still works. Install via D:/Qt/MaintenanceTool.exe then re-run qmake.")
+    warning("audio: Qt Multimedia NOT installed -> QtAudioSource skipped. Microphone disabled; FileAudioSource (WAV playback) still works. Install it via the Qt MaintenanceTool, then re-run qmake.")
     DEFINES += PITCH_HAVE_QT_MULTIMEDIA=0
 }
 

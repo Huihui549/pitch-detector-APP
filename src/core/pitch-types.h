@@ -4,7 +4,7 @@
 // dev-docs/pitch-detector-APP/design/architecture.md 第二节）。
 //
 // 参数来源：上游网页版唯一算法实现
-//   [PC] D:\dev_project\pitch-detector\tools\pitch-engine.js（492 行，以下简称"上游引擎"）
+//   [上游] ../pitch-detector-web/tools/pitch-engine.js（492 行，以下简称"上游引擎"）
 // 每个常数的取值理由都写在上游引擎的注释里，本文件只标注对应位置，不重复叙述（R7 SSOT）。
 // 改动任何常数都必须同时改动上游引擎并重跑跨语言对拍，否则两条链会分叉（上游 pitfalls #22）。
 

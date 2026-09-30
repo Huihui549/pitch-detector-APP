@@ -5,9 +5,9 @@
  *   1 = A0、26 = A#2、40 = C4、63 = B5、88 = C8。
  * 上游曾用"编号 26–63 逐个频率命中、相邻频率比中位 1.0591 vs 理论 1.0595"证实过该对应关系。
  *
- * 用法（[PC]）：
- *   node tools/rename-piano.mjs --dir "D:\钢琴88键独立音频文件"            # 预演（默认，不改任何文件）
- *   node tools/rename-piano.mjs --dir "D:\钢琴88键独立音频文件" --apply    # 真正改名
+ * 用法（[PC]，--dir 指向素材目录本身，可用相对或绝对路径）：
+ *   node tools/rename-piano.mjs --dir "<素材目录>\钢琴88键独立音频文件"            # 预演（默认，不改任何文件）
+ *   node tools/rename-piano.mjs --dir "<素材目录>\钢琴88键独立音频文件" --apply    # 真正改名
  *
  * 安全约束（用户素材，按 R9 精神处理）：
  *   1. **默认预演**，必须显式 --apply 才动文件

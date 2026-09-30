@@ -1,6 +1,6 @@
 // WAV 读取实现
 //
-// 上游对照：[PC] D:\dev_project\pitch-detector\tools\wav-read.mjs（readWavMono）
+// 上游对照：[上游] ../pitch-detector-web/tools/wav-read.mjs（readWavMono）
 // 与上游的三点一致要求：
 //   1. 逐块扫描 chunk，不假设 fmt 与 data 的先后顺序
 //   2. chunk 长度为奇数时跳过 1 字节填充

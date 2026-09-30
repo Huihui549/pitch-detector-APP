@@ -54,7 +54,7 @@ PitchSessionController::PitchSessionController(QObject* parent) : QObject(parent
 #else
     m_unavailableReason = QStringLiteral(
         "未安装 Qt Multimedia 模块，麦克风不可用。"
-        "请用 D:\\Qt\\MaintenanceTool.exe 勾选 Qt Multimedia 后重新构建；"
+        "请用 Qt 安装目录下的 MaintenanceTool 勾选 Qt Multimedia 后重新构建；"
         "或在下方选择“文件回放”用一段 WAV 验证实时链路。");
 #endif
 }
@@ -136,7 +136,7 @@ void PitchSessionController::startMicrophone() {
     }
 #else
     m_unavailableReason = QStringLiteral(
-        "未安装 Qt Multimedia 模块，麦克风不可用。请用 D:\\Qt\\MaintenanceTool.exe 勾选 Qt Multimedia 后重新构建。");
+        "未安装 Qt Multimedia 模块，麦克风不可用。请用 Qt 安装目录下的 MaintenanceTool 勾选 Qt Multimedia 后重新构建。");
     emit stateChanged();
 #endif
 }

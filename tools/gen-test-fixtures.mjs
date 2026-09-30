@@ -14,14 +14,18 @@
  *   node tools/gen-test-fixtures.mjs
  *
  * 上游依赖（只读）：
- *   [PC] D:\dev_project\pitch-detector\tools\pitch-engine.js   —— 算法真值
- *   [PC] D:\dev_project\pitch-detector\tools\wav-read.mjs       —— WAV 读取（与上游分析器同源）
+ *   [上游] ../pitch-detector-web/tools/pitch-engine.js   —— 算法真值
+ *   [上游] ../pitch-detector-web/tools/wav-read.mjs       —— WAV 读取（与上游分析器同源）
+ *   路径不在此内联：由 tools/_path-policy.mjs 从本仓库位置向上查找兄弟目录
+ *   （可用环境变量 PITCH_WEB_ROOT 覆盖），缺失时直接抛错，不静默跳过（pitfalls A7）。
  */
 
 import { createRequire } from "node:module";
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { getUpstreamEngine, getUpstreamWavread } from "./_path-policy.mjs";
 
 const require = createRequire(import.meta.url);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -30,15 +34,8 @@ const OUT_DIR = join(REPO, "tests", "data");
 
 /* ============================ 上游依赖 ============================ */
 
-const UPSTREAM_ROOT = "D:/dev_project/pitch-detector";
-const UPSTREAM_ENGINE = `${UPSTREAM_ROOT}/tools/pitch-engine.js`;
-const UPSTREAM_WAVREAD = `${UPSTREAM_ROOT}/tools/wav-read.mjs`;
-
-if (!existsSync(UPSTREAM_ENGINE) || !existsSync(UPSTREAM_WAVREAD)) {
-  console.error(`[FAIL] 找不到上游依赖：\n  ${UPSTREAM_ENGINE}\n  ${UPSTREAM_WAVREAD}`);
-  console.error("      上游项目是本项目算法真值的唯一来源，缺失时不得静默跳过（pitfalls A7）。");
-  process.exit(1);
-}
+const UPSTREAM_ENGINE = getUpstreamEngine();
+const UPSTREAM_WAVREAD = getUpstreamWavread();
 
 const Engine = require(UPSTREAM_ENGINE);
 const { readWavMono } = await import(`file:///${UPSTREAM_WAVREAD}`);

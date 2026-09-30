@@ -28,7 +28,7 @@ HEADERS += \
 INCLUDEPATH += $$PWD $$PWD/../src/core $$PWD/../src/io
 
 # 路径基准：本文件位于 tools/，故 $$PWD/.. 才是仓库根（**一级**）。
-# 写多一级会解析到仓库的父目录 D:\dev_project\lib，链接时直接 `cannot find -lpitch-io`（实测踩过）。
+# 写多一级会解析到仓库的父目录（例如 <父目录>/lib），链接时直接 `cannot find -lpitch-io`（实测踩过）。
 LIBS += -L$$PWD/../lib -lpitch-io -lpitch-core -lm
 
 DESTDIR = $$PWD/../bin

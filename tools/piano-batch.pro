@@ -3,7 +3,7 @@
 # 与 cross-check 一样：纯标准库实现，不依赖 Qt。
 #
 # 用法（本仓库根目录）：
-#   bin\piano-batch.exe --dir "D:\钢琴88键独立音频文件" --csv reports\piano-88.csv --md reports\piano-88.md
+#   bin\piano-batch.exe --dir "<素材目录>\钢琴88键独立音频文件" --csv reports\piano-88.csv --md reports\piano-88.md
 #
 # 判定口径（与上游一致）：众数音名正确 **且** |中位偏差| < 50 音分。
 

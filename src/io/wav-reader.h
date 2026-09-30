@@ -1,7 +1,7 @@
 // WAV 读取（未压缩 PCM，下混为单声道）
 //
 // **量化口径必须与上游一致**（否则跨语言对拍会出现无法归因的幅度差异）：
-//   [PC] D:\dev_project\pitch-detector\tools\wav-read.mjs
+//   [上游] ../pitch-detector-web/tools/wav-read.mjs
 //     8 bit  → (byte − 128) / 128
 //     16 bit → int16 / 32768      ← 注意是 32768 而不是 32767
 //     32 bit → int32 / 2147483648

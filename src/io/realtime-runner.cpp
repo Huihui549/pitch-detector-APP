@@ -1,7 +1,7 @@
 // 实时链路逐帧分析实现
 //
 // 上游对照：
-//   [PC] D:\dev_project\pitch-detector\pitch.html 的实时循环 —— 固定窗 4096、帧进 512、
+//   [上游] ../pitch-detector-web/pitch.html 的实时循环 —— 固定窗 4096、帧进 512、
 //   直接单帧调 detectPitch（不走级联窗长）。
 // 本实现只复刻"逐帧检测 + 音名换算"这一段；采集、平滑、保持、界面刷新属控制器职责（src/app/）。
 

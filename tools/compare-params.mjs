@@ -20,10 +20,12 @@ import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { getUpstreamEngine } from "./_path-policy.mjs";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
 
-const UPSTREAM = "D:/dev_project/pitch-detector/tools/pitch-engine.js";
+const UPSTREAM = getUpstreamEngine();
 const CPP_HEADER = join(REPO, "src", "core", "pitch-types.h");
 
 /**

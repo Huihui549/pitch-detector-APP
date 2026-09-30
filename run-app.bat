@@ -1,23 +1,26 @@
 @echo off
 REM ------------------------------------------------------------------
-REM 运行音高检测工具（自包含部署版）
+REM Run the pitch detection tool (self-contained deployed build).
 REM
-REM 直接双击本文件即可。run\ 目录由 windeployqt 生成，含 Qt 运行库与
-REM 标准 QML 模块；本项目自己的 QML 界面已编进 exe 的资源里，
-REM 因此不依赖任何磁盘 QML 布局（这是改用 qmake 的额外收益）。
+REM Just double-click. The run\ directory is produced by windeployqt and
+REM contains the Qt runtime plus standard QML modules; this project's own QML
+REM is compiled into the exe resources, so it does not depend on any QML
+REM layout on disk (a side benefit of switching to qmake).
 REM
-REM 重新部署（改了代码之后）：
-REM   D:\Qt\6.8.3\mingw_64\bin\qmake.exe pitch-detector-APP.pro CONFIG+=release
-REM   D:\Qt\Tools\QtCreator\bin\jom\jom.exe
-REM   D:\Qt\6.8.3\mingw_64\bin\windeployqt.exe --release --qmldir qml --no-translations --no-system-d3d-compiler --no-opengl-sw run\pitch-detector-APP.exe
+REM To redeploy after changing code: run build-and-run.bat instead. It does
+REM qmake -> build -> windeployqt -> start and locates Qt by itself, which is
+REM why this file needs no machine-specific path at all.
+REM
+REM NOTE: keep this file PURE ASCII -- see the encoding note in
+REM build-and-run.bat and pitfall A34.
 REM ------------------------------------------------------------------
 
 setlocal
 set "APP=%~dp0run\pitch-detector-APP.exe"
 
 if not exist "%APP%" (
-    echo [错误] 找不到程序：%APP%
-    echo         请先构建并部署（命令见本文件顶部注释），或改用 build-and-run.bat。
+    echo [ERROR] executable not found: %APP%
+    echo         Run build-and-run.bat first to build and deploy.
     pause
     exit /b 1
 )
