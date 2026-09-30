@@ -119,6 +119,9 @@
 | 界面自检（无头） | `bin\pitch-detector-APP.exe --qmlcheck` | **已实测通过**（2026-09-30）：QML 根对象创建成功、零 QML 错误 |
 | **界面截图（配色/图标核对）** | `bin\pitch-detector-APP.exe --uishot <png>` | **已实测通过**：渲染成 PNG（400×860）后退出；用像素抽样核对令牌色是否真的生效（坑 A44） |
 | 实时链路自检（无头） | `bin\pitch-detector-APP.exe --looptest` | **已实测通过**（2026-09-30）：5/5（27.5 Hz A0 … 1046.5 Hz C6） |
+| **节拍器离线自检**（无头，不碰声卡） | `bin\pitch-detector-APP.exe --metrocheck`（可加 `--metrowav <wav>` 导出试听文件） | **已实测通过**（2026-09-30）：**65/65**。核对点击位置（同角色抖动 ≤1 样点）、块长无关性（逐位相同）、重叠下按期望重建（最大差 0）、自定义样本、打包与夹紧、拍号模型 |
+| **节拍器真实输出自检** | `bin\pitch-detector-APP.exe --metrolive=3` | **已实测通过**（2026-09-30）：48000 Hz/2ch/Float32，3 秒 151552 帧、37 次回调（会真的发声） |
+| **指定页面截图** | `bin\pitch-detector-APP.exe --uishot <png> --page metro`（可加 `--theme light`） | **已实测通过**：用于按像素核对某个页面的令牌色与图标着色 |
 | 音频设备自检 | `bin\pitch-detector-APP.exe --devices` | **已实测通过**（2026-09-30）：FFmpeg 7.1 后端，设备因机器而异 |
 | 文件分析自检（无头） | `bin\pitch-detector-APP.exe --selftest <wav> --expect <音名>` | 已实测通过（A4 / A3 素材均命中） |
 | 部署 | `windeployqt --release --qmldir qml ... run\pitch-detector-APP.exe` **＋ 手工补 Qt Multimedia** | 已实测通过（孤岛运行 PASS，含设备枚举） |
@@ -136,6 +139,24 @@
 - **命令行构建的两个实测坑**：① `android_arm64_v8a/bin/qmake.bat` 要求 `ANDROID_NDK_ROOT` / `ANDROID_SDK_ROOT` / `JAVA_HOME` 以**环境变量**形式存在——只当 qmake 参数传会报 `You need to set the ANDROID_NDK_ROOT environment variable` 并连带说 mkspec 读不了 ② `androiddeployqt.exe` 在 **host 侧** `<QtRoot>/6.8.3/mingw_64/bin/`，**不在** `android_arm64_v8a/bin/`。脚本务必"失败即停"，并在安装前**打印 APK 时间戳**（否则旧包会安静地安装成功，坑 A46）
 - **`#ifdef Q_OS_ANDROID` 分支桌面构建不参与编译**：改了 JNI 代码（`QJniObject` / `QNativeInterface::QAndroidApplication` 等）必须跑一次 Android 目标构建才算验证过（坑 A46）
 - **真机自动化检查前先唤醒屏幕**：屏幕熄灭（`dumpsys power` 的 `mWakefulness=Asleep`）时 `adb shell am start` 起的进程**能出现在 `ps` 里但 `main()` 不推进**，启动期写的诊断文件不会出现——看起来像"改动没生效"（实测踩过，坑 A47）。正确顺序：`input keyevent KEYCODE_WAKEUP` → `am force-stop` → 删旧诊断文件并**确认删除成功** → `am start`
+
+## 节拍器（2026-09-30 新增，F6 / ADR-0016）
+
+- **页面**：底栏第 2 位「节拍器」（`qml/pages/MetronomePage.qml`），共 5 个导航位（实时 / 节拍器 / 文件 / 音域 / 更多）
+- **分层**：拍号与逐拍细分模型、点击音合成、时间轴调度、输出打包都在 `src/core`（零 Qt、可单测）；
+  `QAudioSink` 拉模式在 `src/audio/metronome-engine`；界面接线在 `src/app/metronome-controller`（QML 单例 `Metronome`）
+- **铁律（改动前先读）**：
+  - 点击时刻**只能**由音频线程按采样点摆放，**不要**改成 `QTimer` + `QSoundEffect`（抖动+漂移，ADR-0016）
+  - **单次点击的峰值必须归一化**到角色目标值（强 0.95 / 弱 0.80 / 细分 0.45）；多路重叠超 1.0 属正常，由 `packMono` 的总增益+硬夹紧兜住（坑 A48）
+  - 合成音的噪声必须是**无状态**哈希（按样点下标），带状态 RNG 会让"不同块长渲染出不同声音"（坑 A49）
+  - 验证重叠场景时不要用包络检测去分辨每个点击，改用"按期望 (位置,角色) 独立重建再逐样点比对"（坑 A50）
+  - BPM 指"每拍"（分母那个时值）；6/8 的二拍感 = **复合拍号自动按 3 个一组加重音**（6/8 重音在第 1、4 拍），
+    若要 DAW 那种"按附点四分计速"的语义，需要另加「节拍基准」选项（当前**不做**，见 ADR-0016）
+  - 拍号预置 12 种（含 1/4、5/8、2/2）；点击测速（tap tempo）的纯逻辑在 `src/core/tap-tempo`
+- **自检**：`--metrocheck`（数值，86 项）、`--metrolive=3`（声卡）、`--metrowav <wav>`（导出试听）
+- **后续完善项（用户已点名，等他发话再做，别自己开工）**：逐拍重音开关、逐拍静音、时值取值扩到 1–6（+配置串版本化兼容）。
+  需求与验收清单在 `dev-docs/pitch-detector-APP/features/pitch-detector/spec.md` 的「F6 增补」表；计划行见 `dev.md` 单元 16。
+  **明确不做**：DAW 式「节拍基准（BPM basis）」——BPM 一律指分母时值，二拍感靠复合拍号自动重音分组
 - **存储访问（2026-09-30 真机 A/B 实测，ADR-0015）**：Android 11（API 30）起 `Android/data` 与 `Android/obb` 对**所有第三方应用**封锁——系统选择器里看不到，`MANAGE_EXTERNAL_STORAGE`（"所有文件访问权限"）也打不开（授权前后都是"可读=否 0 项"，该权限已从清单删除）。要分析的音频必须放在**公共目录**（`Download` / `Music` / `Documents`）；QQ 接收的文件默认落在 `Android/data`，需用户手动移出。诊断入口：Debug 页「存储访问」卡片，或 `adb shell run-as org.pitchdetector.app cat files/storageprobe.txt`
 
 - **Qt Multimedia 已安装**（用 Qt 安装目录下的 `MaintenanceTool.exe`，headless 装入 6.8.3）：
@@ -150,6 +171,9 @@
 
 - **改了 `.pro` 或增删源文件后必须重新 qmake**：qmake 用 `-incremental` 不重读 `.pro`；
   只改 `.pro` 内容而不增删文件时，Makefile **不会**自动重生成（实测踩过，表现为"改了没生效"）
+- **只改了静态库（`src/core`、`src/io`、`src/audio`）的源码后，`jom` 不会重链 app**：qmake 只把 `LIBS += -lpitch-core`
+  写进链接命令行，**不把 .a 当 exe 的依赖**，于是新代码没进二进制、你验证到的是上一版逻辑（实测踩过：自检失败项与改前**一模一样**，差点误判成"改动无效"，坑 A52）。
+  正确做法：删 `bin/pitch-detector-APP.exe` 再 `jom`，并**核对 exe 时间戳比 `lib/*.a` 新**
 - **`.pro` 与 `.qrc` 必须存为 UTF-8 无 BOM**（坑 A20：带 BOM 时 qmake 静默忽略文件开头的一批赋值）
 - **C++20 标志写在各子工程自己的 `QMAKE_CXXFLAGS`**：subdirs 顶层变量不传子工程，
   且只有 `QMAKE_CXXFLAGS` 会进最终命令（`QMAKE_CXXFLAGS_RELEASE/_DEBUG` 会被 mkspec 覆盖）

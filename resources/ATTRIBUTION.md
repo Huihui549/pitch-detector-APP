@@ -15,14 +15,14 @@
 | 来源 | `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/<name>.svg`（官方 npm 包 CDN） |
 | 官网 | https://lucide.dev/ |
 | 登记日期 | 2026-09-30 |
-| 本地形态 | 30 个 SVG，24×24 viewBox，描边为 **`#ffffff`**（原文是 `currentColor`，见下方"本地修改"） |
+| 本地形态 | 32 个 SVG，24×24 viewBox，描边为 **`#ffffff`**（原文是 `currentColor`，见下方"本地修改"） |
 
 **已收录**（文件名即 Lucide 图标名）：
 
-- 导航：`activity`（实时）・`file-audio`（文件）・`gauge`（音域）・`ellipsis`（更多）
+- 导航：`activity`（实时）・`file-audio`（文件）・`gauge`（音域）・`metronome`（节拍器）・`ellipsis`（更多）
 - 采集/播放：`mic`・`mic-off`・`play`・`square`
 - 文件操作：`folder-open`・`save`・`file-text`・`trash-2`・`download`・`upload`
-- 其它动作：`refresh-cw`・`share-2`・`search`・`settings`・`sliders-horizontal`・`x`
+- 其它动作：`refresh-cw`・`share-2`・`search`・`settings`・`sliders-horizontal`・`pointer`・`x`
 - 状态：`check`・`circle-alert`・`triangle-alert`・`circle-x`・`info`・`bug`
 - 领域：`waves`・`music`
 - 方向：`chevron-left`・`chevron-right`
@@ -35,7 +35,7 @@ Lucide 原生用 `stroke="currentColor"` 表示"颜色交给使用方"，但两�
 2. `MultiEffect.colorization` 是**按源亮度**参与混合的 → 黑色源乘任何颜色**仍然是黑**。
    在深色主题下表现为"未选中时图标几乎看不见"（**用户实测反馈**）。
 
-故**入库时已把 `currentColor` 统一替换为 `#ffffff`**（30/30 个文件）：
+故**入库时已把 `currentColor` 统一替换为 `#ffffff`**（32/32 个文件）：
 
 ```
 stroke="currentColor"   ->   stroke="#ffffff"

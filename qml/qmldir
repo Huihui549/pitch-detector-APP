@@ -22,14 +22,18 @@ Main 1.0 Main.qml
 
 BottomNavBar 1.0 components/BottomNavBar.qml
 CentsBar 1.0 components/CentsBar.qml
+Chip 1.0 components/Chip.qml
+IconButton 1.0 components/IconButton.qml
 LevelMeter 1.0 components/LevelMeter.qml
 NoteDisplay 1.0 components/NoteDisplay.qml
 PageHeader 1.0 components/PageHeader.qml
 PitchCurve 1.0 components/PitchCurve.qml
 StatCard 1.0 components/StatCard.qml
+ValueSlider 1.0 components/ValueSlider.qml
 
 DebugPage 1.0 pages/DebugPage.qml
 FilePage 1.0 pages/FilePage.qml
 LivePage 1.0 pages/LivePage.qml
+MetronomePage 1.0 pages/MetronomePage.qml
 MorePage 1.0 pages/MorePage.qml
 RangePage 1.0 pages/RangePage.qml

@@ -20,16 +20,20 @@
         <file>components/ActionButton.qml</file>
         <file>components/BottomNavBar.qml</file>
         <file>components/CentsBar.qml</file>
+        <file>components/Chip.qml</file>
         <file>components/Icon.qml</file>
+        <file>components/IconButton.qml</file>
         <file>components/LevelMeter.qml</file>
         <file>components/NoteDisplay.qml</file>
         <file>components/PageHeader.qml</file>
         <file>components/PageScroller.qml</file>
         <file>components/PitchCurve.qml</file>
         <file>components/StatCard.qml</file>
+        <file>components/ValueSlider.qml</file>
         <file>pages/DebugPage.qml</file>
         <file>pages/FilePage.qml</file>
         <file>pages/LivePage.qml</file>
+        <file>pages/MetronomePage.qml</file>
         <file>pages/MorePage.qml</file>
         <file>pages/RangePage.qml</file>
     </qresource>

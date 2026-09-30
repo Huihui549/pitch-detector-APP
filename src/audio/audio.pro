@@ -22,11 +22,13 @@ QT += core
 QMAKE_CXXFLAGS += -std=c++20 -Wall -Wextra -Wpedantic -Wshadow
 
 SOURCES += \
-    file-audio-source.cpp
+    file-audio-source.cpp \
+    metronome-engine.cpp
 
 HEADERS += \
     i-audio-source.h \
-    file-audio-source.h
+    file-audio-source.h \
+    metronome-engine.h
 
 INCLUDEPATH += $$PWD/../core $$PWD/../io
 

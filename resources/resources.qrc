@@ -28,10 +28,12 @@
         <file>icons/info.svg</file>
         <file>icons/mic.svg</file>
         <file>icons/mic-off.svg</file>
+        <file>icons/metronome.svg</file>
         <file>icons/moon.svg</file>
         <file>icons/music.svg</file>
         <file>icons/palette.svg</file>
         <file>icons/play.svg</file>
+        <file>icons/pointer.svg</file>
         <file>icons/refresh-cw.svg</file>
         <file>icons/save.svg</file>
         <file>icons/search.svg</file>

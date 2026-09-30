@@ -8,6 +8,8 @@
 // 理由：无头环境下我无法点击界面，但必须能**自动验证**"WAV → 算法 → 对外数据"这段是否真的通。
 
 #include "file-analysis-controller.h"
+#include "metronome-check.h"
+#include "metronome-controller.h"
 #include "pitch-session-controller.h"
 #include "storage-access.h"
 #include "theme.h"
@@ -132,6 +134,8 @@ int main(int argc, char* argv[]) {
     bool wantsQmlCheck = false;
     bool wantsDevices = false;
     bool wantsUiShot = false;
+    bool wantsMetroCheck = false;
+    bool wantsMetroLive = false;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--selftest" || arg.rfind("--selftest=", 0) == 0) {
@@ -142,10 +146,18 @@ int main(int argc, char* argv[]) {
             wantsDevices = true;
         } else if (arg == "--uishot" || arg.rfind("--uishot=", 0) == 0) {
             wantsUiShot = true;
+        } else if (arg == "--metrocheck" || arg.rfind("--metrowav=", 0) == 0) {
+            wantsMetroCheck = true;
+        } else if (arg == "--metrolive" || arg.rfind("--metrolive=", 0) == 0) {
+            wantsMetroLive = true;
         }
     }
-    // 设备枚举需要 Qt Multimedia（属 GUI 侧运行时），故与 qmlcheck 一同走 QGuiApplication
-    const bool needGui = !wantsSelfTest || wantsQmlCheck || wantsDevices || wantsUiShot;
+    // 设备枚举需要 Qt Multimedia（属 GUI 侧运行时），故与 qmlcheck 一同走 QGuiApplication。
+    // 节拍器离线自检是纯计算（不碰声卡），与 --selftest 一样走 QCoreApplication 即可无头运行；
+    // 而 --metrolive 要打开声卡，与设备枚举同类，必须留在 GUI 路径上。
+    const bool headless = (wantsSelfTest || wantsMetroCheck) && !wantsQmlCheck && !wantsDevices &&
+                          !wantsUiShot && !wantsMetroLive;
+    const bool needGui = !headless;
 
     std::unique_ptr<QCoreApplication> appHolder;
     if (needGui) {
@@ -199,6 +211,21 @@ int main(int argc, char* argv[]) {
     QCommandLineOption loopTestOption(
         QStringLiteral("looptest"),
         QStringLiteral("实时链路自检：注入合成信号（A4=440Hz 等）走与麦克风相同的处理链路，验证实时检测是否可用"));
+    QCommandLineOption metroCheckOption(
+        QStringLiteral("metrocheck"),
+        QStringLiteral("节拍器离线自检（不碰声卡）：逐样点核对点击位置、块长无关性、音色幅度与自定义样本"));
+    QCommandLineOption metroWavOption(
+        QStringLiteral("metrowav"),
+        QStringLiteral("把节拍器渲染结果导出成 WAV 供人耳试听（参数为输出路径，可与 --metrocheck 同用）"),
+        QStringLiteral("wav"));
+    QCommandLineOption metroLiveOption(
+        QStringLiteral("metrolive"),
+        QStringLiteral("节拍器**真实输出**自检：打开声卡播放若干秒并报告设备/格式/帧数（用 --metrolive=3 指定秒数，默认 3）"),
+        QStringLiteral("seconds"));
+    QCommandLineOption pageOption(
+        QStringLiteral("page"),
+        QStringLiteral("启动时直接切到指定页面（live/file/range/metro/more/debug）：供截图与排查用"),
+        QStringLiteral("key"));
     parser.addOption(selfTestOption);
     parser.addOption(expectOption);
     parser.addOption(qmlCheckOption);
@@ -207,7 +234,16 @@ int main(int argc, char* argv[]) {
     parser.addOption(devicesOption);
     parser.addOption(micTestOption);
     parser.addOption(loopTestOption);
+    parser.addOption(metroCheckOption);
+    parser.addOption(metroWavOption);
+    parser.addOption(metroLiveOption);
+    parser.addOption(pageOption);
     parser.process(app);
+
+    if (parser.isSet(metroCheckOption) || parser.isSet(metroWavOption)) {
+        // 纯计算自检：不打开声卡、不起界面，故可在无音频设备的机器上跑
+        return pitch::runMetronomeCheck(parser.value(metroWavOption));
+    }
 
     if (parser.isSet(loopTestOption)) {
         // 实时链路自检：把已知频率的合成信号按 512 样点逐批"喂"进控制器，
@@ -354,6 +390,57 @@ int main(int argc, char* argv[]) {
         return app.exec();
     }
 
+    if (parser.isSet(metroLiveOption)) {
+        // 真实输出自检：**离线自检证明了波形对不对，这里证明声卡这条链路通不通**。
+        // 只有它能回答"程序到底有没有把数据交给设备"——听不到声音时这是唯一能查的地方。
+        double duration = 3.0;
+        for (int i = 1; i < argc; ++i) {
+            const std::string a = argv[i];
+            const std::string key = "--metrolive=";
+            if (a.rfind(key, 0) == 0) {
+                duration = std::atof(a.substr(key.size()).c_str());
+            }
+        }
+        if (!(duration > 0.0) || duration > 120.0) {
+            duration = 3.0;
+        }
+
+        QTextStream out(stdout);
+        auto* metro = new pitch::MetronomeController(&app);
+        // 用固定参数跑：4/4、第 1 拍两个八分、120 BPM —— 与离线自检同一套参数，便于互相对照
+        metro->setBpm(120);
+        metro->applyMeter(4, 4);
+        metro->setSubdivision(0, 2);
+        out << "节拍器实时输出自检：播放 " << duration << " 秒（4/4，第 1 拍两个八分，120 BPM）…\n";
+        metro->start();
+        out << "输出设备：" << metro->outputDescription() << "\n";
+        if (!metro->playing()) {
+            out << "[FAIL] 未能开始播放：" << metro->notice() << "\n";
+            return 1;
+        }
+
+        auto* report = new QTimer(&app);
+        report->setInterval(1000);
+        QObject::connect(report, &QTimer::timeout, &app, [metro, &out]() {
+            out << "  " << metro->statusText() << " ｜ " << metro->engineStats()
+                << " ｜ 拍号指示：第 " << (metro->activeBeat() + 1) << " 拍\n";
+            out.flush();
+        });
+        report->start();
+
+        QTimer::singleShot(static_cast<int>(duration * 1000.0), &app, [metro, &out]() {
+            out << "输出设备：" << metro->outputDescription() << "\n";
+            out << "统计：" << metro->engineStats() << "\n";
+            const bool ok = metro->playing() && metro->engineStats().contains(QStringLiteral("回调"));
+            metro->stop();
+            out << (ok ? "[PASS] 音频输出链路可用（数据已交给声卡）\n"
+                       : "[FAIL] 音频输出链路未工作\n");
+            out.flush();
+            QCoreApplication::quit();
+        });
+        return app.exec();
+    }
+
     if (parser.isSet(devicesOption)) {
         QTextStream out(stdout);
         // 同样写一份文件：手机端读不到 stdout（见 --mictest 的说明）
@@ -388,6 +475,27 @@ int main(int argc, char* argv[]) {
                 << "\n";
         }
         out << (inputs.isEmpty() ? "[WARN] 未找到任何输入设备\n" : "[PASS] Qt Multimedia 可用且有输入设备\n");
+
+        // 输出设备：节拍器要用（会自己选默认输出设备并退让格式，这里只是把它列出来核对）
+        const QList<QAudioDevice> outputs = QMediaDevices::audioOutputs();
+        out << "\n===== 音频输出设备（节拍器用）=====\n";
+        out << "默认输出设备：" << QMediaDevices::defaultAudioOutput().description() << "\n";
+        out << "设备数：" << outputs.size() << "\n";
+        devOut << "\n默认输出设备：" << QMediaDevices::defaultAudioOutput().description() << "\n";
+        devOut << "输出设备数：" << outputs.size() << "\n";
+        for (const QAudioDevice& d : outputs) {
+            const QAudioFormat f = d.preferredFormat();
+            const QString line = QStringLiteral("  · %1%2 ｜ 首选 %3 Hz / %4 声道 / 格式码 %5")
+                                     .arg(d.description())
+                                     .arg(d.isDefault() ? QStringLiteral("  [默认]") : QString())
+                                     .arg(f.sampleRate())
+                                     .arg(f.channelCount())
+                                     .arg(static_cast<int>(f.sampleFormat()));
+            out << line << "\n";
+            devOut << line << "\n";
+        }
+        out << (outputs.isEmpty() ? "[WARN] 未找到任何输出设备（节拍器无法发声）\n"
+                                  : "[PASS] 有可用输出设备（节拍器可发声）\n");
 #else
         out << "[FAIL] 本二进制在构建时未包含 Qt Multimedia（PITCH_HAVE_QT_MULTIMEDIA=0）\n";
         out << "       请确认已安装 Qt Multimedia，并在重新构建前重新运行 qmake。\n";
@@ -404,6 +512,8 @@ int main(int argc, char* argv[]) {
     auto* fileAnalysis = new pitch::FileAnalysisController(&app);
     // 存储访问诊断：回答"为什么在手机上选不到/读不到某些目录里的音频"（Android 存储策略 vs 权限）
     auto* storage = new pitch::StorageAccess(&app);
+    // 节拍器：拍号/细分/BPM 的规则在 src/core，发声在 src/audio，这里只做界面接线与持久化
+    auto* metronome = new pitch::MetronomeController(&app);
     // 主题也走同一注册路径（qmake 构型下 QML 模块的单例声明不可用，见 theme.h 的说明）
     auto* theme = new pitch::ThemeProvider(&app);
     if (parser.isSet(themeOption)) {
@@ -414,6 +524,7 @@ int main(int argc, char* argv[]) {
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Session", session);
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "FileAnalysis", fileAnalysis);
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Storage", storage);
+    qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Metronome", metronome);
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Theme", theme);
 
     const bool qmlCheck = parser.isSet(qmlCheckOption);
@@ -480,6 +591,14 @@ int main(int argc, char* argv[]) {
         // 退出码 0 = 界面能被创建；QML 里的错误会以警告形式出现在 stderr，需人工核对。
         QTextStream(stdout) << "[PASS] QML 根对象创建成功：" << engine.rootObjects().size() << " 个\n";
         QTimer::singleShot(1200, &app, &QCoreApplication::quit);
+    }
+
+    // 启动时直接切页（供截图/排查）：改的是 Main.qml 的 currentPage 属性，
+    // 因此与用户在界面上点导航走的是同一条路径，不会出现"截图看到的是特例状态"。
+    if (parser.isSet(pageOption) && !engine.rootObjects().isEmpty()) {
+        const QString key = parser.value(pageOption);
+        engine.rootObjects().first()->setProperty("currentPage", key);
+        QTextStream(stdout) << "已切换到页面：" << key << "\n";
     }
 
     if (uiShot) {

@@ -63,12 +63,15 @@
 |---|---|---|
 | `components/Icon.qml` | **所有图标** | SVG + `MultiEffect` 着色；颜色传 `Theme.*`。**图标必须是白描边**（`#ffffff`）：`colorization` 按源亮度混合，黑色源染不上色、深底下等于看不见（坑 A44） |
 | `components/ActionButton.qml` | 所有按钮 | `primary`（强调色实心）/ 非 primary（透明 + 1px 描边）；高度 ≥ `Theme.touchTarget` |
-| `components/BottomNavBar.qml` | 底部四入口 | M3 惯例：图标在上、标签在下、选中项有胶囊底（`accentDim`） |
+| `components/BottomNavBar.qml` | 底部导航（现为 5 个入口） | M3 惯例：图标在上、标签在下、选中项有胶囊底（`accentDim`） |
 | `components/NoteDisplay.qml` | 主读数（音名） | 字号自适应但**下限 `Theme.fontHuge`**；有效时强调色 + "已锁定"状态行 |
 | `components/CentsBar.qml` | 音分条 | 指针外层柔光 + 内层实针；|音分| ≤5 用 `ok`，否则 `warn` |
 | `components/LevelMeter.qml` | 输入电平 | 对数刻度；门槛刻线取 `Session.rmsFloor`（**界面不写 0.008**） |
 | `components/PageHeader.qml` | 页头 | 左侧 3px 强调色指示条 + 标题 + 副标题；底部 1px 描边 |
 | `components/StatCard.qml` | 指标卡 | 标签 / 主值 / 提示三行 |
+| `components/Chip.qml` | 选择胶囊（拍号预置、快选项） | `selected` 时用 `accentDim` 底 + `accent` 描边 + 加粗；高度 ≥ 40 |
+| `components/IconButton.qml` | **只有图标**的按钮（一行里放多个轻操作） | 与 `ActionButton` 同一套着色规则；点击区仍为 `Theme.touchTarget` |
+| `components/ValueSlider.qml` | 数值滑块（如 BPM） | 只重写 `background`/`handle` 两处为令牌；`live: true` 让拖动实时生效 |
 | `component Card`（**页面内联**） | 页面卡片 | 照抄 `pages/LivePage.qml` 顶部那段：面 + 1px 描边 + 内边距三件套 |
 
 ## 四、新增一个页面：照抄这个顺序
@@ -96,6 +99,17 @@
 | `powershell -ExecutionPolicy Bypass -File tools/check-theme.ps1` | `[PASS]`：qml/ 里不得出现十六进制色值、`Qt.rgba(`/`Qt.hsla(`、裸 `font.pixelSize`、裸 `radius` |
 | `powershell -ExecutionPolicy Bypass -File tools/check-layering.ps1` | 三项全 PASS（界面不得出现算法参数） |
 | `bin/pitch-detector-APP.exe --uishot <png>` | 渲染界面成 PNG，用于**像素抽样核对**配色/图标是否真的生效（我读不了图，这是唯一的客观验证手段） |
+| `bin/pitch-detector-APP.exe --uishot <png> --page metro [--theme light]` | 核对**非首屏页面**与浅色主题：指定页面 + 指定主题各截一张，再按颜色距离统计像素 |
+
+### 已知交互配方（新页面照抄）
+
+- **一拍一块的指示器**：见 `pages/MetronomePage.qml` 的 `component BeatBlock` ——
+  一个控件同时是"当前拍指示灯"和"这一拍的细分数编辑器"（点一下循环切换）。
+  手机上别再挤一行专门用于编辑的控制；`Flow { Layout.fillWidth: true; Repeater { … } }` 让 8–16 个块自动换行。
+- **行内多操作**：标题 + 名称（`Layout.fillWidth` + `elide: Text.ElideMiddle`）+ 多个 `IconButton`；
+  用带文字的 `ActionButton` 会挤到放不下。
+- **不可用/失败提示**：统一 `Icon("circle-alert") + Text(Theme.warn)` 的卡片内 `RowLayout`，
+  文案直接来自 C++（`notice` / `unavailableReason`），界面不改写不判断。
 
 > `check-theme.ps1` 必须保持**纯 ASCII**（坑 A12）且改动后要**做负向验证**（坑 A13：构造违规必须能 FAIL）。
 

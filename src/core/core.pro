@@ -32,16 +32,26 @@ QMAKE_CXXFLAGS += -std=c++20 -Wall -Wextra -Wpedantic -Wshadow -Wconversion
 
 SOURCES += \
     analysis-runner.cpp \
+    audio-packer.cpp \
+    click-voice.cpp \
+    metronome-pattern.cpp \
+    metronome-renderer.cpp \
     note-converter.cpp \
     octave-unifier.cpp \
-    pitch-engine.cpp
+    pitch-engine.cpp \
+    tap-tempo.cpp
 
 HEADERS += \
     analysis-runner.h \
+    audio-packer.h \
+    click-voice.h \
+    metronome-pattern.h \
+    metronome-renderer.h \
     note-converter.h \
     octave-unifier.h \
     pitch-engine.h \
-    pitch-types.h
+    pitch-types.h \
+    tap-tempo.h
 
 # 数值计算需要数学库（MinGW 下需显式链接）
 LIBS += -lm

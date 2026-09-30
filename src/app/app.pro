@@ -64,11 +64,15 @@ SOURCES += \
     main.cpp \
     pitch-session-controller.cpp \
     file-analysis-controller.cpp \
+    metronome-check.cpp \
+    metronome-controller.cpp \
     storage-access.cpp
 
 HEADERS += \
     pitch-session-controller.h \
     file-analysis-controller.h \
+    metronome-check.h \
+    metronome-controller.h \
     storage-access.h \
     theme.h
 
