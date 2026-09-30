@@ -47,20 +47,15 @@ int runSelfTest(const QString& wavPath, const QString& expectNote) {
     // 先直接用同一个读取器读一次：把"读文件失败"与"分析无有效音高"分开报，
     // 否则两者都表现为"分析未产生有效音高"，无法定位（曾经因此白查一轮）。
     {
-        const std::wstring wide = wavPath.toStdWString();
-        const std::string narrow = wavPath.toStdString();
-        const pitch::WavData probe = pitch::readWavMonoW(wide);
-        const pitch::WavData viaNarrow = pitch::readWavMono(narrow);
-        out << "预检读取：宽字符路径 " << (probe.ok ? "成功" : "失败")
+        // 路径统一按 UTF-8 传（Windows 上由 readWavMono 内部转 UTF-16）。
+        // 原来的"宽字符 vs 窄字符"两条路对比已取消：窄字符按本地代码页解释那条路已不存在（坑 A29）。
+        const pitch::WavData probe = pitch::readWavMono(wavPath.toUtf8().toStdString());
+        out << "预检读取：" << (probe.ok ? "成功" : "失败")
             << "（样点 " << static_cast<double>(probe.samples.size()) << "，采样率 " << probe.sampleRate;
         if (!probe.ok) {
             out << "，原因：" << QString::fromStdString(probe.error);
         }
-        out << "）；窄字符路径 " << (viaNarrow.ok ? "成功" : "失败");
-        if (!viaNarrow.ok) {
-            out << "（" << QString::fromStdString(viaNarrow.error) << "）";
-        }
-        out << "\n";
+        out << "）\n";
         if (!probe.ok) {
             return 2;
         }

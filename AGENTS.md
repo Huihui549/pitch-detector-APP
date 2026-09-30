@@ -121,6 +121,16 @@
 | 文件分析自检（无头） | `bin\pitch-detector-APP.exe --selftest <wav> --expect <音名>` | 已实测通过（A4 / A3 素材均命中） |
 | 部署 | `windeployqt --release --qmldir qml ... run\pitch-detector-APP.exe` **＋ 手工补 Qt Multimedia** | 已实测通过（孤岛运行 PASS，含设备枚举） |
 
+### Android 构建（2026-09-30 实测打通，arm64-v8a）
+
+- **Qt Creator 用 20.0.0**（`<QtRoot>/Tools/QtCreator-20/bin/qtcreator.exe`）；9.0.0 已删除——它自带的 `android/sdk_definitions.json` 版本表只到 Qt 6.4，对 Qt 6.8 会兜底要求 2021 年的 `ndk;25.1.8937393`
+- **Qt for Android 套件**：`<QtRoot>/6.8.3/android_arm64_v8a`（含 qtmultimedia）。注意它**没有 `bin/qmake.exe`**，只有包装脚本 `bin/qmake.bat`（内部用 host qmake + `target_qt.conf`）
+- **版本必须成对（缺一即失败，详见 pitfalls A39）**：JDK **17** / `cmdline-tools` **12.0**（新版 23.0.0 的 `sdkmanager --list` 用斜杠包名，Qt Creator 解析不到 platform/build-tools）/ `build-tools;34.0.0` / `platforms;android-34` / `ndk;26.1.10909125`（与 Qt 6.8.3 官方 Android 库同一 NDK）
+- **SDK 根目录**：由环境变量 `ANDROID_SDK_ROOT` 与 Qt Creator 的 `[AndroidConfigurations] SDKLocation` 提供；仓库内不写盘符。`sdkmanager` 必须落在 `<AndroidSdk>/cmdline-tools/latest/bin/sdkmanager.bat`（Qt Creator 只认这一处），且必须用 JDK 17 运行
+- **Gradle**：Qt 不带本体，首次构建从 `gradle-wrapper.properties` 的 `distributionUrl` 下载（Gradle 8.10）；国内直连实测仅 ~75 KB/s，按 pitfalls A40 改成镜像
+- **本仓库的 Android 特有两件事**：① 静态库带 ABI 后缀（`libpitch-core_arm64-v8a.a`），链接处必须带后缀（坑 A37）② 顶层 `.pro` 的 `!android` 作用域排除了 `tools`/`tests`（它们在手机上无意义且在非 Windows 编不过，坑 A38）
+- **命令行等价流程**（影子构建，不污染仓库）：`qmake <repo>/pitch-detector-APP.pro -spec android-clang "ANDROID_ABIS=arm64-v8a" "ANDROID_SDK_ROOT=…" "ANDROID_NDK_ROOT=…" "ANDROID_SDK_BUILD_TOOLS_REVISION=34.0.0"` → `jom` → 产出 `<repo>/bin/libpitch-detector-APP_arm64-v8a.so`（用 `llvm-readelf -h` 应报 `AArch64`）；打 APK 由 Qt Creator 的「构建安卓 APK」步骤完成（先 `make install INSTALL_ROOT=…` 再调 androiddeployqt）
+
 - **Qt Multimedia 已安装**（用 Qt 安装目录下的 `MaintenanceTool.exe`，headless 装入 6.8.3）：
   组件名 `qt.qt6.683.addons.qtmultimedia`，装法：
   `<QtRoot>\MaintenanceTool.exe install qt.qt6.683.addons.qtmultimedia --root <QtRoot> --accept-licenses --accept-obligations --accept-messages --confirm-command`

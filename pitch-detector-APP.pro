@@ -32,17 +32,30 @@ CONFIG -= debug_and_release debug
 CONFIG += release
 
 # 依赖序：core → io → audio → app；tools / tests 只依赖 core 与 io
-SUBDIRS = \
+#
+# Android 构建只含应用本体：tools 是桌面侧批量验证工具（piano-batch 更是 Windows 专有，
+# 用 GetCommandLineW/FindFirstFileW/readWavMonoW），tests 是本机单测——两者在手机上都没有
+# 意义，且在非 Windows 平台编不过（实测踩过：readWavMonoW/toWidePath 只在 _WIN32 里存在）。
+APP_SUBDIRS = \
     src/core/core.pro \
     src/io/io.pro \
     src/audio/audio.pro \
-    src/app/app.pro \
-    tools/tools.pro \
-    tests/core-tests.pro
+    src/app/app.pro
+
+!android {
+    APP_SUBDIRS += \
+        tools/tools.pro \
+        tests/core-tests.pro
+}
+
+SUBDIRS = $$APP_SUBDIRS
 
 # 依赖关系：保证被依赖的库先构建，且链接时已存在
 src/io/io.pro.depends = src/core/core.pro
 src/audio/audio.pro.depends = src/core/core.pro src/io/io.pro
 src/app/app.pro.depends = src/core/core.pro src/io/io.pro src/audio/audio.pro
-tools/tools.pro.depends = src/core/core.pro src/io/io.pro
-tests/core-tests.pro.depends = src/core/core.pro src/io/io.pro
+
+!android {
+    tools/tools.pro.depends = src/core/core.pro src/io/io.pro
+    tests/core-tests.pro.depends = src/core/core.pro src/io/io.pro
+}

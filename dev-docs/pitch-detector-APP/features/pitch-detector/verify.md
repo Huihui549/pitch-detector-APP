@@ -49,6 +49,9 @@
 | C8 | QML 界面可加载（无头） | `pitch-detector-APP.exe --qmlcheck` | `[PASS] QML 根对象创建成功`，且无 QML 警告 | **通过**（2026-09-28：零 `Unable to assign`／`is not defined`） |
 | C9 | 文件分析链路端到端（无头） | `pitch-detector-APP.exe --selftest <wav> --expect <音名>` | 退出码 0，音名匹配 | **通过**（A4 素材 → A4/440.02 Hz/+0.1 音分；A3 含泛音素材 → A3/220.00 Hz/+0.0 音分） |
 | C10 | Qt Multimedia 运行期可用 | `pitch-detector-APP.exe --devices` | 报出 `PITCH_HAVE_QT_MULTIMEDIA=1` 且有输入设备 | **通过**（2026-09-29：2 个输入设备，FFmpeg 7.1 后端；**部署目录孤岛运行下同样通过**） |
+| C11 | Android 交叉编译（arm64-v8a） | `qmake <repo>/pitch-detector-APP.pro -spec android-clang "ANDROID_ABIS=arm64-v8a" …` + `jom`（版本组合见 `AGENTS.md` 的 Android 小节） | 0 error；产出 `bin/libpitch-detector-APP_arm64-v8a.so`，`llvm-readelf -h` 报 `AArch64` | **通过**（2026-09-30：0 error；`ELF64 / DYN / AArch64`，417 KB） |
+| C12 | 桌面中文路径不退化（A29 能力） | `bin\pitch-detector-APP.exe --selftest <素材目录>\tone (49) - A4.wav --expect A4` | 预检读取成功且众数音名 A4，退出码 0 | **通过**（2026-09-30：396900 样点 / 44100 Hz / A4，+8.3 音分） |
+| C13 | 真机 APK | Qt Creator 20「构建安卓 APK」→ 安装到手机 | 安装成功且界面可运行 | **通过**（2026-09-30，用户手动验证，手机 `3XQ0225B04012528`）；**麦克风未验**——尚无 `RECORD_AUDIO` 清单（待办见第六节） |
 
 ## 二、真机 / 人工验收（用户执行）
 

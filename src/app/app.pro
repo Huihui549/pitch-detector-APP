@@ -71,7 +71,21 @@ INCLUDEPATH += $$PWD/../core $$PWD/../io $$PWD/../audio
 # QML 资源：路径前缀 /PitchDetector，于是资源内为 :/PitchDetector/Main.qml
 RESOURCES += $$PWD/../../qml/qml.qrc
 
-LIBS += -L$$PWD/../../lib -lpitch-audio -lpitch-io -lpitch-core -lm
+# 静态库链接。
+#
+# **Android 必须带 ABI 后缀**：qmake 的 android.prf 会给静态库的 TARGET 追加 `_$$QT_ARCH`
+# （见 <QtRoot>/6.8.3/android_arm64_v8a/mkspecs/features/android/android.prf:45-47），
+# 于是产物叫 libpitch-core_arm64-v8a.a；而链接器的 `-l` 只按 lib<name>.a 去找，
+# 不带后缀就只会命中**桌面那份** libpitch-core.a（MinGW 的 std::span 符号与 Android 的
+# libc++ __ndk1::span 不同），表现为"符号明明在库里却报一堆 undefined symbol"（实测踩过）。
+ANDROID_LIB_SUFFIX =
+android: ANDROID_LIB_SUFFIX = _$${QT_ARCH}
+
+LIBS += -L$$PWD/../../lib \
+        -lpitch-audio$${ANDROID_LIB_SUFFIX} \
+        -lpitch-io$${ANDROID_LIB_SUFFIX} \
+        -lpitch-core$${ANDROID_LIB_SUFFIX} \
+        -lm
 
 DESTDIR = $$PWD/../../bin
 OBJECTS_DIR = $$OUT_PWD/obj

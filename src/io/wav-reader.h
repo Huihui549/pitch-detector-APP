@@ -29,18 +29,20 @@ struct WavData {
 
 /// 读取未压缩 PCM WAV 并下混为单声道。
 ///
-/// @param path 文件路径（窄字符）。**仅适用于纯 ASCII 路径**：
-///             中文等非 ASCII 路径在 Windows 上按本地代码页解释，会打不开文件。
-///             非 ASCII 路径请用下面的宽字符重载（见坑 A29）。
+/// @param path 文件路径，**必须是 UTF-8 编码**（跨平台统一口径）：
+///             - Android / Linux：文件名本就是 UTF-8 字节，直接交给窄字符 `ifstream`；
+///             - Windows：窄字符 `ifstream` 按 ANSI 代码页解释路径，中文必然打不开，
+///               故内部先转 UTF-16 再走宽字符 API（坑 A29）。
+///             Qt 侧统一用 `path.toUtf8().toStdString()` 传入；
+///             **不要**用 `toStdString()`/`toLocal8Bit()`（那是本地代码页），也不要再调宽字符版。
 /// @return 结果；失败时 ok=false 且 error 给出原因（调用方必须检查，不得静默当空数据用）
 WavData readWavMono(const std::string& path);
 
 #if defined(_WIN32)
-/// 读取未压缩 PCM WAV（宽字符路径版本）。
+/// 读取未压缩 PCM WAV（宽字符路径版本）。**仅 Windows 存在**：
+/// 非 Windows 上 `wchar_t` 的宽度与编码都不同（Android 是 UTF-32），Qt 侧一律走上面的 UTF-8 入口。
 ///
-/// 为什么需要它：Windows 上 `std::ifstream(const char*)` 按当前 ANSI 代码页解释路径，
-/// 于是"中文目录/中文文件名"必然打不开。本项目 Qt 侧用 `QString::toStdWString()` 传进来，
-/// 既保持 src/io **零 Qt 依赖**，又让中文路径可用。
+/// 现有调用方只有 Windows 专有工具（`tools/piano-batch`，它从宽字符命令行取路径）。
 WavData readWavMonoW(const std::wstring& path);
 #endif
 

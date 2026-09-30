@@ -183,7 +183,30 @@ WavData parseWav(std::istream& in, WavData& out) {
 
 } // namespace
 
+#if defined(_WIN32)
+namespace {
+/// UTF-8 → UTF-16（Windows 专用）。转换失败返回空串，由调用方按"打开失败"处理。
+std::wstring utf8ToWide(const std::string& utf8) {
+    if (utf8.empty()) {
+        return std::wstring();
+    }
+    const int need =
+        MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), nullptr, 0);
+    if (need <= 0) {
+        return std::wstring();
+    }
+    std::wstring wide(static_cast<std::size_t>(need), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), wide.data(), need);
+    return wide;
+}
+} // namespace
+#endif
+
 WavData readWavMono(const std::string& path) {
+#if defined(_WIN32)
+    // 入参是 UTF-8：必须先转 UTF-16 再走宽字符 API，否则中文路径按 ANSI 解释会打不开（坑 A29）。
+    return readWavMonoW(utf8ToWide(path));
+#else
     WavData out;
     std::ifstream in(path, std::ios::binary);
     if (!in) {
@@ -191,6 +214,7 @@ WavData readWavMono(const std::string& path) {
         return out;
     }
     return parseWav(in, out);
+#endif
 }
 
 #if defined(_WIN32)

@@ -23,8 +23,9 @@ FileAudioSource::~FileAudioSource() = default;
 
 bool FileAudioSource::load(const QString& path) {
     stop();
-    // 走宽字符入口：素材路径常含中文，窄字符版在 Windows 上按本地代码页解释会打不开（坑 A29）
-    const WavData wav = readWavMonoW(path.toStdWString());
+    // 路径统一按 UTF-8 传入：Windows 上由 readWavMono 内部转 UTF-16，中文路径才不会打不开
+    // （坑 A29）；Android/Linux 的文件名本就是 UTF-8 字节，同一条写法也成立。
+    const WavData wav = readWavMono(path.toUtf8().toStdString());
     if (!wav.ok) {
         emit errorOccurred(AudioErrorKind::Unknown,
                            QStringLiteral("无法读取音频文件：%1").arg(QString::fromStdString(wav.error)));

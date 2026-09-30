@@ -247,9 +247,10 @@ void FileAnalysisController::pollProgress() {
 
 void FileAnalysisController::runAnalysis() {
     // ===== 以下在工作线程执行：只碰数据 =====
-    // 路径必须走**宽字符入口**：素材目录/文件名常含中文，QString::toStdString() 会按本地
-    // 代码页转成 8 位窄字符，窄字符版 ifstream 打不开这种路径（坑 A29，实测踩过）。
-    const WavData wav = readWavMonoW(m_loadedPath.toStdWString());
+    // 路径统一按 **UTF-8** 传入：不要用 QString::toStdString()（那是本地代码页）。
+    // Windows 上 readWavMono 内部转 UTF-16 再打开，中文路径才不会失败（坑 A29，实测踩过）；
+    // Android/Linux 的文件名本就是 UTF-8 字节。
+    const WavData wav = readWavMono(m_loadedPath.toUtf8().toStdString());
 
     if (!wav.ok) {
         m_errorText = QStringLiteral("无法读取音频：%1（只支持未压缩 PCM WAV）")

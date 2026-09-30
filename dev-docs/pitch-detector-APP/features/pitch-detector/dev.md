@@ -272,6 +272,26 @@
   - **部署目录孤岛运行**下三项自检均 PASS（93.2 MB 自包含）
 - **依赖**：单元 9。
 
+## 单元 12：Android 构建链打通（含 3 处构建缺陷修复）
+
+- **目标**：同一份 qmake 工程在 Android（arm64-v8a）上编译、链接、出 APK 并在真机运行；桌面行为不得退化。
+- **改动**：
+  - `src/io/wav-reader.{h,cpp}`：**`readWavMono` 的路径契约定为 UTF-8**（[仓库] `adr/0001-架构与选型.md` ADR-0011）——Windows 分支内部先转 UTF-16 再走既有 `CreateFileW` 路径，非 Windows 直接用窄字符 `ifstream`；取代原来的"宽/窄双入口"。
+  - `src/audio/file-audio-source.cpp`、`src/app/file-analysis-controller.cpp`、`src/app/main.cpp`：调用点统一改为 `readWavMono(path.toUtf8().toStdString())`。
+  - `src/app/app.pro`：Android 链接静态库时带 ABI 后缀（`android: ANDROID_LIB_SUFFIX = _$${QT_ARCH}`）。
+  - `pitch-detector-APP.pro`：只在 `!android` 作用域里加入 `tools`、`tests` 两个子工程。
+- **事实（全部实测，含三条"看起来像玄学"的根因）**：
+  1. **守卫不对称**：`readWavMonoW` 的声明与实现都在 `#if defined(_WIN32)` 内，而 3 个调用点在守卫之外 → Windows 编得过，Android 报 `use of undeclared identifier 'readWavMonoW'`（坑 A38）。
+  2. **静态库 ABI 后缀**：qmake 的 `mkspecs/features/android/android.prf:45-47` 给静态库 TARGET 追加 `_$$QT_ARCH`（产物 `libpitch-core_arm64-v8a.a`）；而链接器的 `-l` 只按 `lib<name>.a` 查找，于是命中了**桌面那份** `libpitch-core.a`（MinGW 符号是 `St4span`，Android 是 libc++ `__ndk1::span`）→ 表现为"符号明明在库里却报一堆 undefined symbol"（坑 A37）。
+  3. **子工程连带编译**：顶层 SUBDIRS 含 `tools/tools.pro` 与 `tests/core-tests.pro`，两者在非 Windows 上编不过（`readWavMonoW`/`toWidePath` 只在 `_WIN32` 里定义），且在手机上没有任何意义 → Android 作用域内排除。
+  4. **改 `.pro` 后必须显式重跑 qmake**（与坑 A22 同源）：本次实测 jom 因 `if not exist Makefile` 复用了旧 Makefile，链接阶段仍在用不带后缀的旧 `LIBS`，删掉 `Makefile*` 重新 qmake 后才通过。
+  5. **环境版本必须成对**：Qt Creator 用 **20.0.0**（9.0.0 自带的 `sdk_definitions.json` 版本表只到 Qt 6.4，对 Qt 6.8 会兜底要求 2021 年的 `ndk;25.1.8937393`）；Android 侧 `cmdline-tools` 用 **12.0**（23.0.0 已改名 "Android CLI"，`sdkmanager --list` 输出斜杠包名，Qt Creator 解析不到，坑 A39）；NDK 用 **26.1.10909125**（`libQt6Core_arm64-v8a.so` 内 clang 指纹 `r487747d/10552028` 与本机 NDK 一致）。
+- **验证结果**：
+  - **Android 交叉编译**：`qmake <repo>/pitch-detector-APP.pro -spec android-clang "ANDROID_ABIS=arm64-v8a" …` + `jom` → **0 error**；产出 [仓库] `bin/libpitch-detector-APP_arm64-v8a.so`，`llvm-readelf -h` 实测 `ELF64 / DYN / AArch64`（417 KB）。
+  - **桌面回归**：`jom` **0 error**；用**中文路径**素材（[素材目录] `tone (49) - A4.wav`）跑 `bin\pitch-detector-APP.exe --selftest … --expect A4` → 预检读取成功（396900 样点 / 44100 Hz）、众数音名 **A4**（442.11 Hz，+8.3 音分）、退出码 0 → 证明新的 UTF-8→UTF-16 路径没有丢坑 A29 的能力。
+  - **真机**：APK 在 Qt Creator 20 侧构建并在手机 `3XQ0225B04012528` 上成功运行（用户手动验证，2026-09-30）。
+- **依赖**：单元 8、9。
+
 ## 单元 11 起：待用户验收与后续
 
 | 计划单元 | 内容 | 前置 |
