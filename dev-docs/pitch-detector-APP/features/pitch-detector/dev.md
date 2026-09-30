@@ -292,6 +292,24 @@
   - **真机**：APK 在 Qt Creator 20 侧构建并在手机 `3XQ0225B04012528` 上成功运行（用户手动验证，2026-09-30）。
 - **依赖**：单元 8、9。
 
+## 单元 13：真机麦克风打不开 + "格式不一致"提示的修复
+
+- **目标**：手机端真正采到麦克风；并消除"设备实际格式与请求不同"这类**本可避免**的提示。
+- **现象（用户真机实测）**：① 点"开始监听"报"无法打开音频输入：QAudioSource::start() 返回空，错误码=0" ② 界面长期挂着"注意：设备实际格式与请求不同（请求 44100 Hz/1 声道，实际 48000 Hz/2 声道）"。
+- **改动**：
+  - 新增 [仓库] `android/AndroidManifest.xml`（从 `<QtRoot>/6.8.3/android_arm64_v8a/src/android/templates/AndroidManifest.xml` 原样复制后再改），显式声明 `RECORD_AUDIO` 与 `uses-feature android.hardware.microphone required="false"`，包名定为 `org.pitchdetector.app`；`src/app/app.pro` 加 `ANDROID_PACKAGE_SOURCE_DIR = $$PWD/../../android`（qmake **没有**权限变量，权限只能进自定义清单）。
+  - `src/audio/qt-audio-source.cpp`：`start()` 开头按平台申请**运行期权限**（`QMicrophonePermission` + `QCoreApplication::checkPermission/requestPermission`，授权后自动按原参数重试）；采样率**在请求阶段就与设备对齐**（设备不支持请求值则直接用设备首选值）；实际格式一律取 `QAudioSource::format()` 真值；"打开设备"抽成 `openDevice()`，错误码为 0 时附带平台相关的排查提示。
+  - `src/audio/file-audio-source.cpp`：删除文件回放时的 `formatMismatch`（采样率由文件决定，谈不上"协商"）。
+- **事实（全部实测）**：
+  1. **清单权限本来就有**：`RECORD_AUDIO` 会被 androiddeployqt 按 `lib/Qt6Multimedia_arm64-v8a-android-dependencies.xml` **自动注入**（改动前生成的旧 APK 清单里实测已存在）。真因不是"没声明"，而是 Android 6+ 的**运行期权限没申请**——Qt 侧表现就是 `start()` 返回空 + 错误码 0，毫无线索（坑 A41）。
+  2. **`isFormatSupported()` 偏保守**：旧实现用它预判，判否即退让并发提示；而该提示本可避免——算法与采样率无关（τ 换算按实际采样率），采样率完全可以先对齐再请求（坑 A42）。
+  3. **自定义清单确实生效**：用 `--no-build` 检查会看到**上一轮遗留的旧清单**而误判"没生效"；`androiddeployqt --gradle` 重建后，`<build>/AndroidManifest.xml` 实测为 `package="org.pitchdetector.app"` + `RECORD_AUDIO`。**核验这类产物必须先删旧目录再重建**。
+- **验证结果**：
+  - Android 交叉编译 **0 error**；`jom install` + `androiddeployqt --gradle` → `BUILD SUCCESSFUL in 3s`，产出 `android-build-debug.apk`（35.96 MB，[PC] 临时构建目录）。
+  - 桌面 **0 error**；中文路径 `--selftest` 仍命中 A4 → 采集层改动未破坏既有能力。
+  - **真机麦克风待用户复验**（`verify.md` C14/C15）：首次点"开始监听"应弹出系统录音权限框。
+- **依赖**：单元 12。
+
 ## 单元 11 起：待用户验收与后续
 
 | 计划单元 | 内容 | 前置 |

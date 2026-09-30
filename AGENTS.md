@@ -129,6 +129,7 @@
 - **SDK 根目录**：由环境变量 `ANDROID_SDK_ROOT` 与 Qt Creator 的 `[AndroidConfigurations] SDKLocation` 提供；仓库内不写盘符。`sdkmanager` 必须落在 `<AndroidSdk>/cmdline-tools/latest/bin/sdkmanager.bat`（Qt Creator 只认这一处），且必须用 JDK 17 运行
 - **Gradle**：Qt 不带本体，首次构建从 `gradle-wrapper.properties` 的 `distributionUrl` 下载（Gradle 8.10）；国内直连实测仅 ~75 KB/s，按 pitfalls A40 改成镜像
 - **本仓库的 Android 特有两件事**：① 静态库带 ABI 后缀（`libpitch-core_arm64-v8a.a`），链接处必须带后缀（坑 A37）② 顶层 `.pro` 的 `!android` 作用域排除了 `tools`/`tests`（它们在手机上无意义且在非 Windows 编不过，坑 A38）
+- **录音权限**：`android/AndroidManifest.xml` 声明 `RECORD_AUDIO`（由 `src/app/app.pro` 的 `ANDROID_PACKAGE_SOURCE_DIR` 引入），**运行期**由 `QtAudioSource::start()` 用 `QMicrophonePermission` 申请——首次点「开始监听」会弹系统权限框。若出现"`QAudioSource::start()` 返回空、错误码=0"，先查权限：清单里声明 ≠ 已授权（坑 A41）
 - **命令行等价流程**（影子构建，不污染仓库）：`qmake <repo>/pitch-detector-APP.pro -spec android-clang "ANDROID_ABIS=arm64-v8a" "ANDROID_SDK_ROOT=…" "ANDROID_NDK_ROOT=…" "ANDROID_SDK_BUILD_TOOLS_REVISION=34.0.0"` → `jom` → 产出 `<repo>/bin/libpitch-detector-APP_arm64-v8a.so`（用 `llvm-readelf -h` 应报 `AArch64`）；打 APK 由 Qt Creator 的「构建安卓 APK」步骤完成（先 `make install INSTALL_ROOT=…` 再调 androiddeployqt）
 
 - **Qt Multimedia 已安装**（用 Qt 安装目录下的 `MaintenanceTool.exe`，headless 装入 6.8.3）：

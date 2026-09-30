@@ -50,11 +50,10 @@ void FileAudioSource::start(int sampleRate, int channels) {
         emit stateChanged(AudioState::Error);
         return;
     }
-    if (sampleRate > 0 && sampleRate != m_sampleRate) {
-        // 与真实设备不同：本实现不做重采样（那会引入额外变量，破坏"输入已知"这个前提）。
-        // 明确报告不一致，由上层决定是否接受。
-        emit formatMismatch(sampleRate, m_sampleRate, channels, 1);
-    }
+    // 文件回放不存在"设备格式协商"：采样率由**文件**决定，调用方传进来的只是默认假设，
+    // 因此这里**不发 formatMismatch**——发了只会让界面挂一条"格式与请求不同"的噪音提示
+    // （真实差异由 description() 显示实际采样率即可）。
+    Q_UNUSED(sampleRate);
     if (m_timer.isActive()) {
         m_timer.stop();
     }

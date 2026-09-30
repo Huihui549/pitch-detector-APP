@@ -14,6 +14,7 @@
 
 #include "i-audio-source.h"
 
+#include <QAudioDevice>
 #include <QAudioFormat>
 #include <QAudioSource>
 #include <QIODevice>
@@ -57,6 +58,10 @@ private:
     /// 把设备给的原生缓冲转成单声道 float。
     /// 按**实际格式**分派：设备可能给 Float / Int16 / Int32 / UInt8，不能假定。
     QVector<float> toMonoFloat(const char* data, qsizetype bytes) const;
+
+    /// 按给定格式**真的去打开**设备，成功返回 true。
+    /// 实际生效的格式一律取 `QAudioSource::format()`（后端可能改写请求值），失败时填 m_lastError。
+    bool openDevice(const QAudioDevice& device, const QAudioFormat& format);
 
     QAudioSource* m_source = nullptr;
     QIODevice* m_device = nullptr;

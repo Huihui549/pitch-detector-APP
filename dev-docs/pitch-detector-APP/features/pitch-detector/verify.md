@@ -51,7 +51,9 @@
 | C10 | Qt Multimedia 运行期可用 | `pitch-detector-APP.exe --devices` | 报出 `PITCH_HAVE_QT_MULTIMEDIA=1` 且有输入设备 | **通过**（2026-09-29：2 个输入设备，FFmpeg 7.1 后端；**部署目录孤岛运行下同样通过**） |
 | C11 | Android 交叉编译（arm64-v8a） | `qmake <repo>/pitch-detector-APP.pro -spec android-clang "ANDROID_ABIS=arm64-v8a" …` + `jom`（版本组合见 `AGENTS.md` 的 Android 小节） | 0 error；产出 `bin/libpitch-detector-APP_arm64-v8a.so`，`llvm-readelf -h` 报 `AArch64` | **通过**（2026-09-30：0 error；`ELF64 / DYN / AArch64`，417 KB） |
 | C12 | 桌面中文路径不退化（A29 能力） | `bin\pitch-detector-APP.exe --selftest <素材目录>\tone (49) - A4.wav --expect A4` | 预检读取成功且众数音名 A4，退出码 0 | **通过**（2026-09-30：396900 样点 / 44100 Hz / A4，+8.3 音分） |
-| C13 | 真机 APK | Qt Creator 20「构建安卓 APK」→ 安装到手机 | 安装成功且界面可运行 | **通过**（2026-09-30，用户手动验证，手机 `3XQ0225B04012528`）；**麦克风未验**——尚无 `RECORD_AUDIO` 清单（待办见第六节） |
+| C13 | 真机 APK | Qt Creator 20「构建安卓 APK」→ 安装到手机 | 安装成功且界面可运行 | **通过**（2026-09-30，用户手动验证，手机 `3XQ0225B04012528`） |
+| C14 | 真机麦克风（**本轮修复后待复验**） | 手机上首次点"开始监听" | 弹出录音权限框 → 允许后出音名与音分 | 待验（修复内容：清单 `RECORD_AUDIO` + 运行期申请 `QMicrophonePermission`，见 `pitfalls A41`；修前表现是"无法打开音频输入：QAudioSource::start() 返回空，错误码=0"） |
+| C15 | 采集格式提示不再虚假出现 | 手机上进入实时页 | 若设备不支持 44100 则请求阶段即与设备对齐（48 kHz），**不出现**"设备实际格式与请求不同"；确实只能拿到 2 声道时才提示 | 待验（见 `pitfalls A42`；桌面文件回放的同类噪音提示已删除） |
 
 ## 二、真机 / 人工验收（用户执行）
 

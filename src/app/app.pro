@@ -81,6 +81,12 @@ RESOURCES += $$PWD/../../qml/qml.qrc
 ANDROID_LIB_SUFFIX =
 android: ANDROID_LIB_SUFFIX = _$${QT_ARCH}
 
+# Android 清单与权限：qmake **没有权限变量**（Qt 6.8.3 只有 CMake 的 QT_ANDROID_PERMISSIONS），
+# 权限只能写进自定义清单，再由 androiddeployqt 替换模板并填充 %%INSERT_* 占位符。
+# RECORD_AUDIO 是**运行期权限**：清单不声明时，手机上 QAudioSource::start() 直接返回空、
+# 错误码 0（实测踩过，坑 A41）；声明后由 QtAudioSource::start() 用 QMicrophonePermission 申请授权。
+ANDROID_PACKAGE_SOURCE_DIR = $$PWD/../../android
+
 LIBS += -L$$PWD/../../lib \
         -lpitch-audio$${ANDROID_LIB_SUFFIX} \
         -lpitch-io$${ANDROID_LIB_SUFFIX} \
