@@ -91,7 +91,7 @@ if not defined QT_ROOT (
 set "QT_BIN=%QT_ROOT%\6.8.3\mingw_64\bin"
 set "QT_PLUGINS=%QT_ROOT%\6.8.3\mingw_64\plugins"
 set "MINGW_BIN=%QT_ROOT%\Tools\mingw1310_64\bin"
-set "JOM=%QT_ROOT%\Tools\QtCreator\bin\jom\jom.exe"
+set "JOM=%QT_ROOT%\Tools\jom\jom.exe"
 
 if not exist "%QT_BIN%\qmake.exe" (
     echo [ERROR] qmake not found: %QT_BIN%\qmake.exe
@@ -105,7 +105,9 @@ if not exist "%MINGW_BIN%\g++.exe" (
     exit /b 1
 )
 
-REM Fall back to mingw32-make when jom is absent (Qt Creator not installed).
+REM Fall back to mingw32-make when jom is absent.
+REM jom ships with the Qt SDK itself (Tools\jom) since Qt Creator was unbundled;
+REM the old Tools\QtCreator\bin\jom path no longer exists here.
 if not exist "%JOM%" (
     if exist "%MINGW_BIN%\mingw32-make.exe" (
         set "JOM=%MINGW_BIN%\mingw32-make.exe"

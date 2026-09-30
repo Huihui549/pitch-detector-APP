@@ -225,6 +225,7 @@ void PitchSessionController::stop() {
     m_running = false;
     m_stateText = QStringLiteral("已停止");
     m_holdTimer.stop();
+    m_recentReadings.clear();   // 稳定性窗口跟着会话走，避免上一段的读数影响下一段
     m_noteName = QStringLiteral("—");
     m_confidence = 0.0;
     m_frequency = 0.0;
@@ -287,6 +288,12 @@ void PitchSessionController::onAudioStateChanged(AudioState state) {
         m_stateText = QStringLiteral("正在监听");
         m_clock.restart();
         m_lastFrameMs = 0;
+        // **设备描述要在真正启动之后再取一次**：用哪个设备是 start() 里才决定的
+        // （例如系统默认是蓝牙时会改用内置麦克风），启动前取到的只是"列表第一个"，
+        // 与实际使用的设备不一致——实测因此误判成"改动没生效"。
+        if (m_source != nullptr) {
+            m_sourceDescription = m_source->description();
+        }
         break;
     case AudioState::Stopped:
         m_running = false;
@@ -376,6 +383,7 @@ void PitchSessionController::processFrame() {
         peak = std::max(peak, std::abs(static_cast<double>(v)));
     }
     const double rmsFloor = std::max(kRmsMin, peak * kRmsRelMin);
+    m_rmsFloor = rmsFloor;   // 暴露给界面画"静音门槛刻线"，界面不得自己写这个数
     if (frameRms < rmsFloor) {
         if (!m_holdTimer.isActive()) {
             m_holdTimer.start();
@@ -383,19 +391,67 @@ void PitchSessionController::processFrame() {
         return;
     }
 
-    // 有结果即停用保持
+    const NoteInfo info = NoteConverter::fromFrequency(result->freq, m_config.a4);
+    m_rms = frameRms;
+    // 保持计时器的语义：**连续 kHoldMs 没有可接受读数**才转「—」（不留残值，pitfalls #2）。
+    // 故它只在下面两个"拒绝该帧"的分支里启动（且已启动时不重启），接受读数时停用；
+
+    // ① **显示门槛**：低置信度帧不许改写读数。
+    //    没有这一条时，噪声与辅音帧（置信度 0.1~0.5）会把音名刷成别的音，界面看起来
+    //    "唱 C4 却来回跳、就是出不来 C4"（用户真机实测）。
+    if (result->confidence < kDisplayMinConfidence) {
+        if (!m_holdTimer.isActive()) {
+            m_holdTimer.start();
+        }
+        return;
+    }
+
+    // ② **稳定性**：把达标帧放进小窗口，只显示"窗口内占多数"的音名（≥ kStableMinCount 帧）。
+    //    单靠门槛仍会跳：人声换气/辅音帧偶尔也过门槛且常偏一个八度。
+    //    不足多数就沿用上一个可靠读数（保持计时器到期后自动转「—」，不留残值）。
+    m_recentReadings.push_back(RecentReading{info.noteIndex, info.octave, info.cents,
+                                             result->freq, result->confidence});
+    while (static_cast<int>(m_recentReadings.size()) > kStableWindow) {
+        m_recentReadings.pop_front();
+    }
+    int bestNote = m_recentReadings.back().noteIndex;
+    int bestCount = 0;
+    for (const RecentReading& candidate : m_recentReadings) {
+        int count = 0;
+        for (const RecentReading& other : m_recentReadings) {
+            if (other.noteIndex == candidate.noteIndex) {
+                ++count;
+            }
+        }
+        if (count >= bestCount) {   // >= 让并列时取更新的那个
+            bestCount = count;
+            bestNote = candidate.noteIndex;
+        }
+    }
+    if (bestCount < kStableMinCount) {
+        if (!m_holdTimer.isActive()) {
+            m_holdTimer.start();
+        }
+        return;
+    }
+    // 显示值取窗口内该音名的**最新一帧**，保证音名/频率/音分三者自洽
+    for (auto it = m_recentReadings.rbegin(); it != m_recentReadings.rend(); ++it) {
+        if (it->noteIndex == bestNote) {
+            m_noteName = QString::fromLatin1(NoteConverter::format(it->noteIndex, it->octave));
+            m_octave = it->octave;
+            m_cents = it->cents;
+            m_frequency = it->freq;
+            m_confidence = it->confidence;
+            break;
+        }
+    }
+
+    // 接受了新读数：停用保持（下一段"无可靠读数"重新计时）
     m_holdTimer.stop();
 
-    const NoteInfo info = NoteConverter::fromFrequency(result->freq, m_config.a4);
-    m_noteName = QString::fromLatin1(NoteConverter::format(info.noteIndex, info.octave));
-    m_octave = info.octave;
-    m_cents = info.cents;
-    m_frequency = result->freq;
-    m_confidence = result->confidence;
-    m_rms = frameRms;
-
-    // 曲线：只在置信度达标时写入（上游 spec：低置信度帧不进曲线）
-    if (m_confidence >= 0.75) {
+    // 曲线与有效时长：只有通过门槛与稳定性检查的读数才会走到这里
+    // （门槛统一在函数上方处理，这里不再重复判断，避免"曲线有点而读数没有"的不一致）
+    {
         const double now = static_cast<double>(m_clock.elapsed()) / 1000.0;
         m_curvePoints.push_back(CurvePoint{now, m_frequency});
         while (!m_curvePoints.empty() && (now - m_curvePoints.front().t) > kCurveSeconds) {

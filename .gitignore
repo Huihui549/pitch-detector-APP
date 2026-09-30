@@ -104,3 +104,6 @@ out/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# 注意：**不要**忽略 *.svg——界面图标与品牌图（resources/icons、resources/branding）
+# 是构建必需的源文件，被 resources.qrc 引用；忽略掉会导致别人克隆后编译失败。

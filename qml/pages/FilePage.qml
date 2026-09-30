@@ -14,10 +14,9 @@ import "../components"
 Item {
     id: page
 
-    ColumnLayout {
+    // 内容区：**可上下滑动**（标题区与底部导航由 Main.qml 固定住，不参与滚动，ADR-0014）
+    PageScroller {
         anchors.fill: parent
-        anchors.margins: Theme.spacing
-        spacing: Theme.spacing
 
         // ---- 选择与分析 ----
         RowLayout {
@@ -91,8 +90,8 @@ Item {
         // ---- 曲线（整段） ----
         PitchCurve {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.minimumHeight: 120
+            // 滚动容器里 `fillHeight` 无意义（高度由内容决定），给固定高度
+            Layout.preferredHeight: 170
             // 抽样与量程由 C++ 一次算完（QML 里按裸 role 号逐行取几万帧会卡界面，属脆弱写法）
             points: FileAnalysis.preview.points
             freqMin: FileAnalysis.preview.freqMin

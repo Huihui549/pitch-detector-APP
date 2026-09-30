@@ -20,17 +20,19 @@ Rectangle {
     implicitHeight: content.implicitHeight + Theme.spacing * 2
     radius: Theme.radius
     color: Theme.surface
+    border.width: 1
+    border.color: Theme.border
 
     Column {
         id: content
         anchors.fill: parent
         anchors.margins: Theme.spacing
-        spacing: 4
+        spacing: Theme.spaceXs
 
         Text {
             text: root.label
             color: Theme.textDim
-            font.pixelSize: Theme.fontSmall
+            font.pixelSize: Theme.fontMicro
         }
 
         Text {

@@ -24,6 +24,10 @@ TARGET = pitch-detector-APP
 # 只引入这一个类，不引入任何 QWidget 界面。
 QT += core gui widgets qml quick quickcontrols2
 
+# svg：图标是 SVG 矢量（resources/icons，Lucide 图标集），Qt 渲染 SVG 需要 QtSvg 模块。
+# 见 resources/ATTRIBUTION.md 与 dev-docs/pitch-detector-APP/design/ui-style.md。
+QT += svg
+
 # Qt Multimedia 是可选依赖，与 src/audio/audio.pro 用同一判定保持一致。
 # 为什么这里也要写一遍：qmake 的 subdirs 各工程相互独立，DEFINES **不会**沿库依赖传递
 # （实测：audio 里写了 PITCH_HAVE_QT_MULTIMEDIA=1，app 里依然是 0）。
@@ -59,17 +63,21 @@ QMAKE_CXXFLAGS += -std=c++20 -Wall -Wextra -Wpedantic -Wshadow
 SOURCES += \
     main.cpp \
     pitch-session-controller.cpp \
-    file-analysis-controller.cpp
+    file-analysis-controller.cpp \
+    storage-access.cpp
 
 HEADERS += \
     pitch-session-controller.h \
     file-analysis-controller.h \
+    storage-access.h \
     theme.h
 
 INCLUDEPATH += $$PWD/../core $$PWD/../io $$PWD/../audio
 
 # QML 资源：路径前缀 /PitchDetector，于是资源内为 :/PitchDetector/Main.qml
 RESOURCES += $$PWD/../../qml/qml.qrc
+# 界面素材（图标/品牌图）：前缀 /resources，QML 侧用 qrc:/resources/… 引用
+RESOURCES += $$PWD/../../resources/resources.qrc
 
 # 静态库链接。
 #

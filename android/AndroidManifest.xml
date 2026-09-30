@@ -9,6 +9,11 @@
          而 Qt 侧只表现为 QAudioSource::start() 返回空、错误码 0（没有任何指向权限的线索，实测踩过）。
          安装期声明在这里；运行期授权由 QtAudioSource::start() 通过 QMicrophonePermission 申请。 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- 这里**故意不申请** MANAGE_EXTERNAL_STORAGE（"所有文件访问权限"）：2026-09-30 真机 A/B
+         实测（HUAWEI ADY-AL10 / Android 12）证明它**打不开** Android/data 与 Android/obb
+         ——授权前后都是"可读=否 0 项"，它只放宽了公共目录里非媒体文件的可见性；对本程序
+         （只读 WAV）没有收益，且属 Google Play 高风险权限（ADR-0015、坑 A45）。
+         所以音频要能被选到，只能放在公共目录（Download / Music / Documents）。 -->
     <!-- 麦克风不作硬性要求：没有麦克风的设备仍可安装（仍能用"文件分析"） -->
     <uses-feature android:name="android.hardware.microphone" android:required="false"/>
     <!-- %%INSERT_FEATURES -->

@@ -310,6 +310,20 @@
   - **真机麦克风待用户复验**（`verify.md` C14/C15）：首次点"开始监听"应弹出系统录音权限框。
 - **依赖**：单元 12。
 
+## 单元 14：存储访问诊断（回答"为什么手机上选不到某些目录的音频"）
+
+- **目标**：用户实测"选择文件时内部存储的 `Android` 目录里只有 media 与 obj"→ 把"目录被系统封锁"与"应用没权限"这两个成因**分别测出来**，并据此判断能否做到"看到手机所有文件"。
+- **改动**：
+  - 新增 `src/app/storage-access.{h,cpp}`（注册为 QML 单例 `Storage`）：① 读"所有文件访问权限"状态（`Environment.isExternalStorageManager()`，先按系统版本判定、仅 API 30+ 才调，避免低版本 `NoSuchMethodError`）② 逐个探测目录（存在性 / 目录标志 / **可读标志** / **条目数** / 头 8 项）③ 在 `/sdcard/Android/data` 下找第一个 `.wav` 并用真实读取器 `readWavMono()` 读一遍 ④ 报告写入 `files/storageprobe.txt`（手机端唯一可读通道，同 `--mictest` 的理由）⑤ `requestAllFilesAccess()` 跳系统设置页（`MANAGE_APP_ALL_FILES_ACCESS_PERMISSION`，失败回退全局页）；JNI 异常用 `QJniEnvironment::checkAndClearExceptions()` 清掉，不让它把进程打崩。
+  - `android/AndroidManifest.xml`：为本次验证加 `MANAGE_EXTERNAL_STORAGE`（`tools:ignore="ScopedStorage"`）。
+  - `qml/pages/DebugPage.qml`：新增「存储访问」卡片（当前权限状态 / 去系统授权 / 重新探测 / 报告原文），全部走 D+E 令牌与既有卡片写法。
+  - `src/app/app.pro` + `src/app/main.cpp`：登记新源文件与单例。
+- **实测结论（同机 A/B，详见 ADR-0015 与坑 A45）**：**`MANAGE_EXTERNAL_STORAGE` 打不开 `Android/data` 与 `Android/obb`**（授权前后都是"可读=否 0 项"，而 `isExternalStorageManager()` 已为 true）；它只放宽了公共目录里**非媒体文件**的可见性（`/sdcard` 15→18 项、`Download` 3→5 项）。用户 QQ 收到的 2 个 `.wav` 恰在 `Android/data` 里 → 任何权限都读不到，"看到所有文件"在无 root 时不可实现。
+- **验证结果**：桌面 `jom` 0 error、`--qmlcheck` 0 错误、`tools/check-theme.ps1` PASS、`tools/check-layering.ps1` PASS；Android 交叉编译 0 error；APK 安装成功并完成授权前/后两次真机探测，另用最新一版 APK（16:51:58）复测：唤醒屏幕后 1 秒内写出报告、内容与当前状态一致；`aapt2 dump permissions` 确认清单里已**无** `MANAGE_EXTERNAL_STORAGE`。
+- **用户决定（2026-09-30）**：验证完毕后**删除 `MANAGE_EXTERNAL_STORAGE` 与「去系统授权」按钮**（实测换不到那两个目录，属高风险权限），`StorageAccess` 只保留"探测 + 报告"能力；B 档（应用内自建浏览器）暂不做。
+- **踩坑**：A46（桌面构建验证不到 `#ifdef Q_OS_ANDROID` 分支；构建脚本未"失败即停"导致 `adb install` 装的是旧包）、A47（屏幕熄灭时 adb 启动应用，进程在但 `main()` 不推进，看起来像写文件失败；撤销 appops 必须带 `--uid`）。
+- **依赖**：单元 12 / 13。
+
 ## 单元 11 起：待用户验收与后续
 
 | 计划单元 | 内容 | 前置 |

@@ -15,6 +15,14 @@
 
 namespace pitch {
 
+namespace {
+/// 设备的"是否蓝牙"判定：Qt 没暴露传输类型，只能看描述串（Android 上形如
+/// "Bluetooth (EDIFIER X Clip)"）。宁可漏判，也不要把非蓝牙误判成蓝牙。
+bool looksBluetooth(const QAudioDevice& device) {
+    return device.description().contains(QStringLiteral("bluetooth"), Qt::CaseInsensitive);
+}
+} // namespace
+
 QtAudioSource::QtAudioSource(QObject* parent) : IAudioSource(parent) {
     m_pollTimer.setTimerType(Qt::PreciseTimer);
     connect(&m_pollTimer, &QTimer::timeout, this, &QtAudioSource::pollDevice);
@@ -29,6 +37,19 @@ bool QtAudioSource::isAvailable() const {
 }
 
 QString QtAudioSource::description() const {
+    // 用**实际选中**的设备，而不是列表第一个（见头文件里 m_deviceInfo 的说明）
+    if (!m_deviceInfo.isNull()) {
+        const QString isDefault = (m_deviceInfo == QMediaDevices::defaultAudioInput())
+                                      ? QStringLiteral("，系统默认")
+                                      : QStringLiteral("，非系统默认");
+        return QStringLiteral("麦克风：%1（%2 Hz / %3 声道%4）")
+            .arg(m_deviceInfo.description())
+            .arg(m_actualFormat.sampleRate() > 0 ? m_actualFormat.sampleRate()
+                                                 : m_deviceInfo.preferredFormat().sampleRate())
+            .arg(m_actualFormat.channelCount() > 0 ? m_actualFormat.channelCount()
+                                                   : m_deviceInfo.preferredFormat().channelCount())
+            .arg(isDefault);
+    }
     const QList<QAudioDevice> devices = QMediaDevices::audioInputs();
     if (devices.isEmpty()) {
         return QStringLiteral("麦克风（未找到输入设备）");
@@ -36,8 +57,8 @@ QString QtAudioSource::description() const {
     const QAudioDevice& d = devices.first();
     return QStringLiteral("麦克风：%1（%2 Hz / %3 声道）")
         .arg(d.description())
-        .arg(m_actualFormat.sampleRate() > 0 ? m_actualFormat.sampleRate() : d.preferredFormat().sampleRate())
-        .arg(m_actualFormat.channelCount() > 0 ? m_actualFormat.channelCount() : d.preferredFormat().channelCount());
+        .arg(d.preferredFormat().sampleRate())
+        .arg(d.preferredFormat().channelCount());
 }
 
 QString QtAudioSource::statsDescription() const {
@@ -94,8 +115,26 @@ void QtAudioSource::start(int sampleRate, int channels) {
         emit stateChanged(AudioState::Error);
         return;
     }
-    const QAudioDevice device = devices.first();
+
+    // 选设备：优先系统默认，但**默认是蓝牙而另有内置麦克风时优先内置**。
+    //
+    // 为什么（真机实测）：手机连着蓝牙音箱时，Android 会把蓝牙设备设成默认输入；
+    // 而 A2DP（只听）模式下它交上来的采集数据是**全 0**——实测读了 31 万字节、非零样点 0.00%，
+    // 于是读数永远是「—」，看起来像"识别不出/太不敏感"，其实一个有效样点都没有。
+    // Qt 侧不会报错，只能靠"选对设备"避免（见坑 A43）。
+    // 代价：想用蓝牙耳机当麦克风时会被忽略——需要时可做成界面里的可选项。
+    const QAudioDevice systemDefault = QMediaDevices::defaultAudioInput();
+    QAudioDevice device = systemDefault.isNull() ? devices.first() : systemDefault;
+    if (looksBluetooth(device)) {
+        for (const QAudioDevice& candidate : devices) {
+            if (!looksBluetooth(candidate)) {
+                device = candidate;
+                break;
+            }
+        }
+    }
     const QAudioFormat preferred = device.preferredFormat();
+    m_deviceInfo = device;   // 供 description() 显示"实际用的是哪个设备"
 
     // 采样率：**主动与设备对齐**，而不是事后再提示"格式与请求不同"。
     // 理由：算法与采样率无关（τ 换算、帧长全部按实际采样率算，见 IAudioSource::actualSampleRate

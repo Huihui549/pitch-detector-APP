@@ -15,10 +15,77 @@ import "../components"
 Item {
     id: page
 
-    ColumnLayout {
+    // 内容区：**可上下滑动**（标题区与底部导航由 Main.qml 固定住，不参与滚动，ADR-0014）
+    PageScroller {
         anchors.fill: parent
-        anchors.margins: Theme.spacing
-        spacing: Theme.spacing
+
+        // ---------- 外观：主题切换（深色 / 浅色）----------
+        // 写入 Theme.mode 即持久化（QSettings `ui/themeMode`），重启后保持（ADR-0013）。
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: appearance.implicitHeight + Theme.spacing * 2
+            radius: Theme.radius
+            color: Theme.surface
+            border.width: 1
+            border.color: Theme.border
+
+            ColumnLayout {
+                id: appearance
+                anchors.fill: parent
+                anchors.margins: Theme.spacing
+                spacing: Theme.spaceSm
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spaceSm
+
+                    Icon {
+                        name: "palette"
+                        size: Theme.iconSm
+                        color: Theme.textDim
+                    }
+                    Text {
+                        text: qsTr("外观")
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fontMicro
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: Theme.dark ? qsTr("当前：深色") : qsTr("当前：浅色")
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fontMicro
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spaceSm
+
+                    ActionButton {
+                        Layout.fillWidth: true
+                        primary: Theme.dark
+                        icon: "moon"
+                        text: qsTr("深色")
+                        onClicked: Theme.mode = "dark"
+                    }
+                    ActionButton {
+                        Layout.fillWidth: true
+                        primary: !Theme.dark
+                        icon: "sun"
+                        text: qsTr("浅色")
+                        onClicked: Theme.mode = "light"
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("深色为默认（弱光下读数更清晰）；浅色适合强光环境。选择会被记住。")
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fontMicro
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
 
         StatCard {
             Layout.fillWidth: true
@@ -63,7 +130,5 @@ Item {
                 wrapMode: Text.WordWrap
             }
         }
-
-        Item { Layout.fillHeight: true }
     }
 }

@@ -6,7 +6,7 @@
 #
 # 构建（[PC] 本目录；<QtRoot> = Qt 安装根目录，见 AGENTS.md「环境与路径约定」）：
 #   <QtRoot>/6.8.3/mingw_64/bin/qmake.exe pitch-detector-APP.pro CONFIG+=release
-#   <QtRoot>/Tools/QtCreator/bin/jom/jom.exe            (或 mingw32-make.exe)
+#   <QtRoot>/Tools/jom/jom.exe                          (或 mingw32-make.exe)
 # 运行：
 #   双击 run-app.bat
 #

@@ -9,6 +9,7 @@
 
 #include "file-analysis-controller.h"
 #include "pitch-session-controller.h"
+#include "storage-access.h"
 #include "theme.h"
 #include "wav-reader.h"
 
@@ -19,6 +20,10 @@
 #include <QFileInfo>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQuickStyle>
+#include <QQuickWindow>
+#include <QStandardPaths>
+#include <QSysInfo>
 #include <QTextStream>
 #include <QTimer>
 
@@ -126,6 +131,7 @@ int main(int argc, char* argv[]) {
     bool wantsSelfTest = false;
     bool wantsQmlCheck = false;
     bool wantsDevices = false;
+    bool wantsUiShot = false;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--selftest" || arg.rfind("--selftest=", 0) == 0) {
@@ -134,10 +140,12 @@ int main(int argc, char* argv[]) {
             wantsQmlCheck = true;
         } else if (arg == "--devices") {
             wantsDevices = true;
+        } else if (arg == "--uishot" || arg.rfind("--uishot=", 0) == 0) {
+            wantsUiShot = true;
         }
     }
     // 设备枚举需要 Qt Multimedia（属 GUI 侧运行时），故与 qmlcheck 一同走 QGuiApplication
-    const bool needGui = !wantsSelfTest || wantsQmlCheck || wantsDevices;
+    const bool needGui = !wantsSelfTest || wantsQmlCheck || wantsDevices || wantsUiShot;
 
     std::unique_ptr<QCoreApplication> appHolder;
     if (needGui) {
@@ -146,6 +154,10 @@ int main(int argc, char* argv[]) {
         // （实测报 `QWidget: Cannot create a QWidget without QApplication`，见坑 A32）。
         // QApplication 是 QGuiApplication 的子类，QML/Quick 照常工作。
         appHolder = std::make_unique<QApplication>(argc, argv);
+        // 控件风格显式钉成 Basic：本项目外观全部由 Theme 令牌 + 自绘组件决定。
+        // 跟随平台默认风格会让 Windows / Android 各带一套配色与圆角，与"风格统一"
+        // 的硬约定冲突（ADR-0012、AGENTS.md 硬约定）。
+        QQuickStyle::setStyle(QStringLiteral("Basic"));
     } else {
         appHolder = std::make_unique<QCoreApplication>(argc, argv);
     }
@@ -169,6 +181,14 @@ int main(int argc, char* argv[]) {
     QCommandLineOption qmlCheckOption(
         QStringLiteral("qmlcheck"),
         QStringLiteral("加载 QML 后立即退出：用于在无头环境下验证界面能否被创建（有 QML 错误则退出码非 0）"));
+    QCommandLineOption uiShotOption(
+        QStringLiteral("uishot"),
+        QStringLiteral("把界面渲染成 PNG 后退出：用像素核对配色与图标可见性（参数为输出路径）"),
+        QStringLiteral("png"));
+    QCommandLineOption themeOption(
+        QStringLiteral("theme"),
+        QStringLiteral("临时指定主题（dark / light）：只影响本次运行、不写入配置，用于截图与排查"),
+        QStringLiteral("mode"));
     QCommandLineOption devicesOption(
         QStringLiteral("devices"),
         QStringLiteral("罗列音频输入设备与首选格式：用于验证 Qt Multimedia 是否在运行期可用"));
@@ -182,6 +202,8 @@ int main(int argc, char* argv[]) {
     parser.addOption(selfTestOption);
     parser.addOption(expectOption);
     parser.addOption(qmlCheckOption);
+    parser.addOption(uiShotOption);
+    parser.addOption(themeOption);
     parser.addOption(devicesOption);
     parser.addOption(micTestOption);
     parser.addOption(loopTestOption);
@@ -253,9 +275,47 @@ int main(int argc, char* argv[]) {
         QTextStream out(stdout);
         auto* session = new pitch::PitchSessionController(&app);
         out << "麦克风采集自检：启动 " << duration << " 秒…\n";
+        // 手机端既没有终端、也没有 logcat 通道（**实测**：stdout 与 qInfo 都不进 logcat），
+        // 故自检把每秒读数**写文件**——debug 包可用
+        //   adb shell run-as <包名> cat files/mictest.txt
+        // 读取，这是手机上唯一能把"现象"变成"数据"的通道。
+        const QString tracePath =
+            QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+            QStringLiteral("/mictest.txt");
+        QDir().mkpath(QFileInfo(tracePath).absolutePath());
+        {
+            QFile f(tracePath);
+            if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+                QTextStream ts(&f);
+                ts << "mictest 开始，时长 " << duration << " 秒\n";
+            }
+        }
+        out << "读数字的方式（手机）：adb shell run-as org.pitchdetector.app cat files/mictest.txt\n";
         session->startMicrophone();
 
-        QTimer::singleShot(static_cast<int>(duration * 1000.0), &app, [session, &out]() {
+        // 每秒一行。这一行同时给出"有没有信号（RMS/回调）"与"识别成什么（音名/频率/置信度）"，
+        // 用来区分三种完全不同的故障：采集没通 / 采集通了但识别不出 / 识别成了别的音。
+        // 没有它，手机上只能靠肉眼看界面，无法把现象变成可比对的数据。
+        auto* tick = new QTimer(&app);
+        tick->setInterval(1000);
+        QObject::connect(tick, &QTimer::timeout, &app, [session, tracePath]() {
+            const QString line =
+                QStringLiteral("RMS峰值=%1 回调=%2 音名=%3 频率=%4 置信度=%5")
+                    .arg(session->peakRms())
+                    .arg(session->callbackCount())
+                    .arg(session->noteName())
+                    .arg(session->frequency())
+                    .arg(session->confidence());
+            qInfo().noquote() << QStringLiteral("[mictest] ") + line;
+            QFile f(tracePath);
+            if (f.open(QIODevice::Append | QIODevice::Text)) {
+                QTextStream ts(&f);
+                ts << line << "\n";
+            }
+        });
+        tick->start();
+
+        QTimer::singleShot(static_cast<int>(duration * 1000.0), &app, [session, &out, tracePath]() {
             out << "状态：" << session->stateText() << "\n";
             out << "采集实现：" << session->sourceDescription() << "\n";
             out << "采集统计：" << session->captureStats() << "\n";
@@ -263,13 +323,31 @@ int main(int argc, char* argv[]) {
             out << "音频回调次数：" << session->callbackCount() << "\n";
             out << "当前读数：音名 " << session->noteName() << "，频率 " << session->frequency()
                 << " Hz，置信度 " << session->confidence() << "\n";
+            QString verdict;
             if (session->peakRms() <= 0.0) {
-                out << "[FAIL] 采集到 0 信号：麦克风通道没通（或被系统静音/禁用）\n";
+                verdict = QStringLiteral("[FAIL] 采集到 0 信号：麦克风通道没通（或被系统静音/禁用）");
             } else if (session->peakRms() < 0.002) {
-                out << "[WARN] 采集到极弱信号（" << session->peakRms()
-                    << "）：环境安静或麦克风被静音，请对着麦克风出声再测\n";
+                verdict = QStringLiteral("[WARN] 采集到极弱信号（%1）：环境安静或麦克风被静音，请对着麦克风出声再测")
+                              .arg(session->peakRms());
             } else {
-                out << "[PASS] 采集到有效信号，通道正常\n";
+                verdict = QStringLiteral("[PASS] 采集到有效信号，通道正常");
+            }
+            out << verdict << "\n";
+            out.flush();
+            qInfo().noquote() << QStringLiteral("[mictest] 结束：%1 | 实现=%2 | 统计=%3 | 音名=%4 频率=%5 置信度=%6")
+                                     .arg(verdict)
+                                     .arg(session->sourceDescription())
+                                     .arg(session->captureStats())
+                                     .arg(session->noteName())
+                                     .arg(session->frequency())
+                                     .arg(session->confidence());
+            // 结论也写进同一份文件：手机端只能这样读（见上面的说明）
+            QFile f(tracePath);
+            if (f.open(QIODevice::Append | QIODevice::Text)) {
+                QTextStream ts(&f);
+                ts << "结论：" << verdict << "\n"
+                   << "采集实现：" << session->sourceDescription() << "\n"
+                   << "采集统计：" << session->captureStats() << "\n";
             }
             QCoreApplication::quit();
         });
@@ -278,15 +356,28 @@ int main(int argc, char* argv[]) {
 
     if (parser.isSet(devicesOption)) {
         QTextStream out(stdout);
+        // 同样写一份文件：手机端读不到 stdout（见 --mictest 的说明）
+        const QString devTrace = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+                                 QStringLiteral("/devices.txt");
+        QDir().mkpath(QFileInfo(devTrace).absolutePath());
+        QFile devFile(devTrace);
+        devFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
+        QTextStream devOut(&devFile);
+        devOut << "运行平台：" << QSysInfo::productType() << " / " << QSysInfo::prettyProductName() << "\n";
 #if PITCH_HAVE_QT_MULTIMEDIA
+        devOut << "默认输入设备：" << QMediaDevices::defaultAudioInput().description() << "\n";
         const QList<QAudioDevice> inputs = QMediaDevices::audioInputs();
         out << "===== 音频输入设备（Qt Multimedia）=====\n";
         out << "设备数：" << inputs.size() << "\n";
+        devOut << "设备数：" << inputs.size() << "\n";
         for (const QAudioDevice& d : inputs) {
             const QAudioFormat f = d.preferredFormat();
             out << "  · " << d.description() << (d.isDefault() ? "  [默认]" : "") << "\n";
             out << "      首选格式：采样率 " << f.sampleRate() << " Hz，声道 " << f.channelCount()
                 << "，样点格式 " << static_cast<int>(f.sampleFormat()) << "\n";
+            devOut << "  · " << d.description() << (d.isDefault() ? "  [默认于列表]" : "") << "\n";
+            devOut << "      首选格式：采样率 " << f.sampleRate() << " Hz，声道 " << f.channelCount()
+                   << "，样点格式 " << static_cast<int>(f.sampleFormat()) << "\n";
             // 用 setter 构造期望格式：QAudioFormat 没有便捷的三参构造（实测花括号初始化会编译失败）
             QAudioFormat wanted;
             wanted.setSampleRate(44100);
@@ -311,14 +402,24 @@ int main(int argc, char* argv[]) {
     // 注册控制器为 QML 单例：整个应用只有一份会话状态，界面各页共享
     auto* session = new pitch::PitchSessionController(&app);
     auto* fileAnalysis = new pitch::FileAnalysisController(&app);
+    // 存储访问诊断：回答"为什么在手机上选不到/读不到某些目录里的音频"（Android 存储策略 vs 权限）
+    auto* storage = new pitch::StorageAccess(&app);
     // 主题也走同一注册路径（qmake 构型下 QML 模块的单例声明不可用，见 theme.h 的说明）
     auto* theme = new pitch::ThemeProvider(&app);
+    if (parser.isSet(themeOption)) {
+        // 临时指定主题（不落盘）：给截图与排查用；界面里的切换会正常持久化
+        theme->applyMode(parser.value(themeOption));
+    }
 
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Session", session);
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "FileAnalysis", fileAnalysis);
+    qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Storage", storage);
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Theme", theme);
 
     const bool qmlCheck = parser.isSet(qmlCheckOption);
+    // 界面截图（可选）：把窗口渲染成 PNG，用于**用像素核对界面**（配色/图标是否可见）
+    const bool uiShot = parser.isSet(uiShotOption);
+    const QString uiShotPath = parser.value(uiShotOption);
     QQmlApplicationEngine engine;
 
     // QML 入口加载（qmake 构型）
@@ -379,6 +480,30 @@ int main(int argc, char* argv[]) {
         // 退出码 0 = 界面能被创建；QML 里的错误会以警告形式出现在 stderr，需人工核对。
         QTextStream(stdout) << "[PASS] QML 根对象创建成功：" << engine.rootObjects().size() << " 个\n";
         QTimer::singleShot(1200, &app, &QCoreApplication::quit);
+    }
+
+    if (uiShot) {
+        // 界面截图：把窗口渲染成 PNG 后退出。用途是**用像素核对配色/图标可见性**——
+        // 例如"图标是否被染成令牌色、而不是渲染成黑色"（见坑 A44），无需人眼看图。
+        // 等 1.5 s 再抓：QML 首帧布局与 MultiEffect 着色都是异步完成的。
+        QTimer::singleShot(1500, &app, [&engine, uiShotPath]() {
+            if (engine.rootObjects().isEmpty()) {
+                QTextStream(stderr) << "[FAIL] 没有根对象，无法截图\n";
+                QCoreApplication::exit(3);
+                return;
+            }
+            auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+            if (window == nullptr) {
+                QTextStream(stderr) << "[FAIL] 根对象不是 QQuickWindow，无法截图\n";
+                QCoreApplication::exit(4);
+                return;
+            }
+            const QImage shot = window->grabWindow();
+            const bool saved = shot.save(uiShotPath);
+            QTextStream(stdout) << (saved ? "[PASS] 界面已截图：" : "[FAIL] 截图保存失败：")
+                                << uiShotPath << "（" << shot.width() << "x" << shot.height() << "）\n";
+            QCoreApplication::exit(saved ? 0 : 5);
+        });
     }
     return app.exec();
 }

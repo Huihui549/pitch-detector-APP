@@ -17,11 +17,14 @@
     <qresource prefix="/PitchDetector">
         <file>qmldir</file>
         <file>Main.qml</file>
+        <file>components/ActionButton.qml</file>
         <file>components/BottomNavBar.qml</file>
         <file>components/CentsBar.qml</file>
+        <file>components/Icon.qml</file>
         <file>components/LevelMeter.qml</file>
         <file>components/NoteDisplay.qml</file>
         <file>components/PageHeader.qml</file>
+        <file>components/PageScroller.qml</file>
         <file>components/PitchCurve.qml</file>
         <file>components/StatCard.qml</file>
         <file>pages/DebugPage.qml</file>

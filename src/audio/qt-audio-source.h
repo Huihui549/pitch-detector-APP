@@ -65,6 +65,10 @@ private:
 
     QAudioSource* m_source = nullptr;
     QIODevice* m_device = nullptr;
+    /// 实际选中的输入设备。**不能**用 `audioInputs().first()` 现场取：那会显示成
+    /// "列表里第一个设备"，与实际使用的设备不一致（真机实测踩过：明明切换到了内置麦，
+    /// 界面仍显示蓝牙设备名，导致误判"改动没生效"）。
+    QAudioDevice m_deviceInfo;
     QAudioFormat m_requestedFormat;
     QAudioFormat m_actualFormat;
     bool m_formatAdjusted = false;  ///< 是否退让过格式（供界面区分"提示"与"正常"）

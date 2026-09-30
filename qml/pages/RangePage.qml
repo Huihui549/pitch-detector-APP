@@ -13,10 +13,9 @@ import "../components"
 Item {
     id: page
 
-    ColumnLayout {
+    // 内容区：**可上下滑动**（标题区与底部导航由 Main.qml 固定住，不参与滚动，ADR-0014）
+    PageScroller {
         anchors.fill: parent
-        anchors.margins: Theme.spacing
-        spacing: Theme.spacing
 
         RowLayout {
             Layout.fillWidth: true
@@ -94,7 +93,5 @@ Item {
             font.pixelSize: Theme.fontSmall
             wrapMode: Text.WordWrap
         }
-
-        Item { Layout.fillHeight: true }
     }
 }

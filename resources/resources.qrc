@@ -1,0 +1,50 @@
+<!DOCTYPE RCC>
+<!--
+  资源清单（图标 / 品牌图）
+
+  与 qml/qml.qrc 分开维护：qml.qrc 管"界面代码"，本文件管"外部素材"。
+  两者都由 src/app/app.pro 的 RESOURCES 编进可执行文件。
+
+  前缀用 /resources：QML 侧以绝对路径引用，例如
+      Icon { name: "mic"; color: Theme.text }
+  内部会拼成 qrc:/resources/icons/mic.svg
+  新增资源时**必须在这里登记**（与 qml/qml.qrc 同样的规矩）。
+-->
+<RCC>
+    <qresource prefix="/resources">
+        <file>icons/activity.svg</file>
+        <file>icons/bug.svg</file>
+        <file>icons/check.svg</file>
+        <file>icons/chevron-left.svg</file>
+        <file>icons/chevron-right.svg</file>
+        <file>icons/circle-alert.svg</file>
+        <file>icons/circle-x.svg</file>
+        <file>icons/download.svg</file>
+        <file>icons/ellipsis.svg</file>
+        <file>icons/file-audio.svg</file>
+        <file>icons/file-text.svg</file>
+        <file>icons/folder-open.svg</file>
+        <file>icons/gauge.svg</file>
+        <file>icons/info.svg</file>
+        <file>icons/mic.svg</file>
+        <file>icons/mic-off.svg</file>
+        <file>icons/moon.svg</file>
+        <file>icons/music.svg</file>
+        <file>icons/palette.svg</file>
+        <file>icons/play.svg</file>
+        <file>icons/refresh-cw.svg</file>
+        <file>icons/save.svg</file>
+        <file>icons/search.svg</file>
+        <file>icons/settings.svg</file>
+        <file>icons/share-2.svg</file>
+        <file>icons/sliders-horizontal.svg</file>
+        <file>icons/square.svg</file>
+        <file>icons/sun.svg</file>
+        <file>icons/trash-2.svg</file>
+        <file>icons/triangle-alert.svg</file>
+        <file>icons/upload.svg</file>
+        <file>icons/waves.svg</file>
+        <file>icons/x.svg</file>
+        <file>branding/app-icon.svg</file>
+    </qresource>
+</RCC>

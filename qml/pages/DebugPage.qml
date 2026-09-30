@@ -14,10 +14,9 @@ import "../components"
 Item {
     id: page
 
-    ColumnLayout {
+    // 内容区：**可上下滑动**（标题区与底部导航由 Main.qml 固定住，不参与滚动，ADR-0014）
+    PageScroller {
         anchors.fill: parent
-        anchors.margins: Theme.spacing
-        spacing: Theme.spacing
 
         // ---- 运行环境与采集格式 ----
         Rectangle {
@@ -39,6 +38,67 @@ Item {
                            ? Session.sourceDescription : qsTr("未启动"))
                       .arg(Session.sampleRate)
                       .arg(Session.notice.length > 0 ? Session.notice : qsTr("无"))
+            }
+        }
+
+        // ---- 存储访问：回答"为什么选不到某些目录里的音频" ----
+        // 数据全部来自 C++（Storage 单例）：界面不自己判断权限，也不拼路径字符串。
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: storageCard.implicitHeight + Theme.spacing * 2
+            radius: Theme.radius
+            color: Theme.surface
+            border.width: 1
+            border.color: Theme.border
+
+            ColumnLayout {
+                id: storageCard
+                anchors.fill: parent
+                anchors.margins: Theme.spacing
+                spacing: Theme.spaceSm
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spaceSm
+
+                    Icon {
+                        name: "folder-open"
+                        size: Theme.iconSm
+                        color: Theme.textDim
+                    }
+                    Text {
+                        text: qsTr("存储访问")
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fontMicro
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+
+                ActionButton {
+                    Layout.fillWidth: true
+                    primary: false
+                    icon: "refresh-cw"
+                    text: qsTr("重新探测")
+                    onClicked: Storage.refresh()
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Android 11 起系统对第三方应用封锁 Android/data 与 Android/obb"
+                               + "（实测连「所有文件访问权限」也打不开）。要分析的音频请放在"
+                               + "Download / Music / Documents 等公共目录。")
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fontMicro
+                    wrapMode: Text.WordWrap
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: Storage.report
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fontMicro
+                    wrapMode: Text.WrapAnywhere
+                }
             }
         }
 
@@ -81,8 +141,8 @@ Item {
         Canvas {
             id: yinCanvas
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.minimumHeight: 140
+            // 滚动容器里 `fillHeight` 无意义（高度由内容决定），给固定高度
+            Layout.preferredHeight: 190
 
             // 界面只做"画"：数据来自 Session.yinCurve（[{tau, cmnd}, ...]）
             property var curve: Session.yinCurve

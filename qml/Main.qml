@@ -26,11 +26,12 @@ ApplicationWindow {
     minimumHeight: 620
     color: Theme.background
 
+    // 导航项：icon 取 resources/icons 里的文件名（Lucide 图标集，清单见 ATTRIBUTION.md）
     readonly property var navItems: [
-        { key: "live", label: qsTr("实时") },
-        { key: "file", label: qsTr("文件") },
-        { key: "range", label: qsTr("音域") },
-        { key: "more", label: qsTr("更多") }
+        { key: "live", label: qsTr("实时"), icon: "activity" },
+        { key: "file", label: qsTr("文件"), icon: "file-audio" },
+        { key: "range", label: qsTr("音域"), icon: "gauge" },
+        { key: "more", label: qsTr("更多"), icon: "ellipsis" }
     ]
 
     property string currentPage: "live"

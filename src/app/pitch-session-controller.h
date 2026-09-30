@@ -84,6 +84,11 @@ class PitchSessionController : public QObject {
     Q_PROPERTY(QString frameDescription READ frameDescription CONSTANT)
     /// 工作音域的可读描述（如 "27–4300 Hz"）。音域是算法参数，界面只显示。
     Q_PROPERTY(QString rangeDescription READ rangeDescription CONSTANT)
+    /// 界面门槛与保持时长由 C++ 暴露：QML 里不得自己写阈值（改一处即可全局生效）
+    Q_PROPERTY(double displayMinConfidence READ displayMinConfidence CONSTANT)
+    Q_PROPERTY(int holdMs READ holdMs CONSTANT)
+    /// 当前帧实际采用的静音门槛（绝对门槛与相对峰值门槛取大者）：界面画刻线用，**不得自己写 0.008**
+    Q_PROPERTY(double rmsFloor READ rmsFloor NOTIFY readingChanged)
 
 public:
     explicit PitchSessionController(QObject* parent = nullptr);
@@ -111,6 +116,9 @@ public:
     QVariantList curve() const { return m_curve; }
     QVariantList yinCurve() const { return m_yinCurve; }
     double yinThreshold() const { return kYinThreshold; }
+    double displayMinConfidence() const { return kDisplayMinConfidence; }
+    int holdMs() const { return kHoldMs; }
+    double rmsFloor() const { return m_rmsFloor; }
     QString frameDescription() const;
     QString rangeDescription() const;
 
@@ -196,10 +204,21 @@ private:
     double m_frequency = 0.0;
     double m_confidence = 0.0;
     double m_rms = 0.0;
+    double m_rmsFloor = 0.0;           ///< 当前帧的静音门槛（供界面画刻线）
     double m_peakRms = 0.0;            ///< 采集期间原始 RMS 峰值（诊断"麦克风有没有收到声音"）
     int m_callbackCount = 0;           ///< 收到音频回调的次数（诊断采集层是否在送数据）
     QTimer m_holdTimer;                ///< 读数保持（防闪断）
     QVariantList m_yinCurve;
+
+    /// 最近若干帧的**达标**候选读数，用于"取众数"的稳定性过滤（见 kStableWindow）。
+    struct RecentReading {
+        int noteIndex;
+        int octave;
+        double cents;
+        double freq;
+        double confidence;
+    };
+    std::deque<RecentReading> m_recentReadings;
 
     // 音高曲线（近 5 秒）
     struct CurvePoint {
@@ -233,6 +252,20 @@ private:
     /// 实测低到约 7 次/秒 → 表现为"识别很不灵敏"（用户实测反馈）。
     /// 固定节奏后：① 界面刷新稳定 ② 低音用的 16384 长窗（单帧算力较高）不会把轮询饿死。
     static constexpr int kFrameIntervalMs = 35;
+
+    /// **显示门槛**：置信度低于此值的帧不许改写读数。
+    ///
+    /// 为什么需要它（用户真机实测）：唱一个稳定的 C4 时，音名会来回跳到很多别的音上，
+    /// 其中夹着 C4 且 C4 的置信度更高——根因就是原来**无条件**写入读数，噪声/辅音帧
+    /// （置信度常只有 0.1~0.5）也照样改音名。原先只有"是否进曲线"用 0.75、
+    /// 音域极值用 0.85，而**显示**这条路一个门槛都没有。
+    /// 0.8 是有意的取舍：宁可短暂保持上一个可靠读数，也不显示低置信度的乱跳值。
+    static constexpr double kDisplayMinConfidence = 0.8;
+
+    /// 稳定性窗口：显示的必须是窗口内出现 ≥ kStableMinCount 次的音名。
+    /// 单靠置信度门槛仍会跳——人声的换气/辅音帧偶尔也能过 0.8，且常偏一个八度。
+    static constexpr int kStableWindow = 5;
+    static constexpr int kStableMinCount = 3;
 };
 
 } // namespace pitch
