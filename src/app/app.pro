@@ -66,6 +66,10 @@ SOURCES += \
     file-analysis-controller.cpp \
     metronome-check.cpp \
     metronome-controller.cpp \
+    piano-roll-image-provider.cpp \
+    piano-roll-renderer.cpp \
+    recorder-controller.cpp \
+    roll-check.cpp \
     storage-access.cpp
 
 HEADERS += \
@@ -73,6 +77,10 @@ HEADERS += \
     file-analysis-controller.h \
     metronome-check.h \
     metronome-controller.h \
+    piano-roll-image-provider.h \
+    piano-roll-renderer.h \
+    recorder-controller.h \
+    roll-check.h \
     storage-access.h \
     theme.h
 
@@ -98,6 +106,13 @@ android: ANDROID_LIB_SUFFIX = _$${QT_ARCH}
 # RECORD_AUDIO 是**运行期权限**：清单不声明时，手机上 QAudioSource::start() 直接返回空、
 # 错误码 0（实测踩过，坑 A41）；声明后由 QtAudioSource::start() 用 QMicrophonePermission 申请授权。
 ANDROID_PACKAGE_SOURCE_DIR = $$PWD/../../android
+
+# Windows 可执行文件图标（资源管理器/任务栏看到的那个）。
+# 为什么必须是 .ico 而不是 .svg：Windows 的 exe 图标是**资源段里的位图**，
+# 只认 ICO 容器；而 ICO 由 tools/icon-gen 从 resources/branding/app-icon.svg 生成
+# （改了 SVG 就要重跑 icon-gen，否则图标还是旧的）。
+# 只对 Windows 生效：其它平台不认识 RC_ICONS（Android 的启动图标是另一套，见 resources/ATTRIBUTION.md）。
+win32: RC_ICONS = $$PWD/../../resources/branding/app-icon.ico
 
 LIBS += -L$$PWD/../../lib \
         -lpitch-audio$${ANDROID_LIB_SUFFIX} \

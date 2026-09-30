@@ -53,7 +53,28 @@ stroke="currentColor"   ->   stroke="#ffffff"
 
 | 文件 | 来源 | 许可 | 说明 |
 |---|---|---|---|
-| `app-icon.svg` | **本项目原创**（按 D 风格绘制：深底 + 青绿波形 + 音叉元素） | 随本项目 | 应用桌面图标源文件；由 `tools/gen-app-icons.ps1` 用 Qt 渲染成各密度 PNG |
+| `app-icon.svg` | **本项目原创**（按 D 风格绘制：深底 + 青绿波形 + 音叉元素） | 随本项目 | 应用图标**源文件**（512×512）。**Windows 的 exe 图标不认 SVG**，必须由 `tools/icon-gen` 转成 ICO |
+| `app-icon.ico` | 由上面的 SVG 生成 | 随本项目 | **多尺寸 ICO**（16/24/32/48/64/128/256，PNG 载荷），供 `src/app/app.pro` 的 `RC_ICONS` 编进 exe。<br>生成命令：`bin\icon-gen.exe --svg resources\branding\app-icon.svg --ico resources\branding\app-icon.ico`<br>**改了 SVG 必须重跑它**，否则资源管理器里还是旧图标 |
+
+> 说明：此前本文件写的"由 `tools/gen-app-icons.ps1` 生成"是**一条并不存在的承诺**（脚本从未创建，
+> 于是 exe 一直带着默认图标——用户实测反馈"软件仍然是默认图标"）。现已改为真实工具 `tools/icon-gen`
+> （Qt 渲染 SVG → 多尺寸 PNG → 自己组装多尺寸 ICO；为什么自己组装：Qt 的 ICO 写入只写单张图，
+> 而桌面图标需要在每个尺寸下都清晰，故每一档都从 SVG 重渲染而不是缩放）。
+> 另外 `app-icon.ico` 是**二进制**且**随仓库提交**：它是 Windows 构建的输入（`RC_ICONS` 编译期读它），
+> 缺了图标就没了——这与"生成物不入库"不冲突，它与 `app-icon.svg` 同源、体积仅约 21 KB。
+> Android 启动图标是另一套（mipmap 各密度 PNG + 清单），当前**未做**。
+
+## 二之二、钢琴卷帘键位图（`piano/`）
+
+| 文件 | 来源 | 许可 | 说明 |
+|---|---|---|---|
+| `key-white.svg` | **本项目原创**（受光渐变 + 描边的琴键面） | 随本项目 | 钢琴卷帘左侧键盘列的**白键**贴片，由 `src/app/piano-roll-renderer.cpp` 用 `QSvgRenderer` 逐行贴 |
+| `key-black.svg` | **本项目原创**（深色渐变 + 顶部高光） | 随本项目 | 同上，**黑键**贴片（比白键窄而矮，压在白键之上） |
+
+为什么自绘而不用网上的钢琴键图片：调研过的开源钢琴卷帘项目（react-piano-roll、pixi-piano-roll、Pypianoroll）
+都是**程序化画键**，没有可直接取用的授权键位图；图库里的钢琴键多为照片（带透视、无法对齐半音行）。
+自绘矢量的几何与配色完全可控，且不引入授权问题——与 `app-icon.svg` 同一处理方式。
+**注意**（坑 A54）：手写 SVG 的 XML 注释必须用 `-->` 结尾，写成 C 风格 `*/` 会让注释吞到文件尾、整个素材失效。
 
 ## 三、以后新增资源时的规矩
 

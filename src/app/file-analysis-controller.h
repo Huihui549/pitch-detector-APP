@@ -15,8 +15,10 @@
 #pragma once
 
 #include "pitch-types.h"
+#include "piano-roll-renderer.h"
 
 #include <QAbstractListModel>
+#include <QImage>
 #include <QObject>
 #include <QString>
 #include <QThread>
@@ -27,6 +29,8 @@
 #include <vector>
 
 namespace pitch {
+
+class ThemeProvider;   ///< 主题令牌（定义在 theme.h；这里只用指针）
 
 /// 曲线预览数据：给界面画整段曲线用的抽样点列 + 自适应纵轴范围。
 ///
@@ -74,9 +78,6 @@ public:
     /// 只读访问底层帧序列（供摘要、曲线抽样等使用；不经过 model role）。
     const std::vector<Frame>& frames() const { return m_frames; }
 
-    /// 导出为 CSV 文本（含表头）。返回空串表示无数据。
-    QString toCsv() const;
-
 private:
     std::vector<Frame> m_frames;
 };
@@ -108,9 +109,42 @@ class FileAnalysisController : public QObject {
     Q_PROPERTY(int frameCount READ frameCount NOTIFY resultChanged)
     /// 错误/提示信息。
     Q_PROPERTY(QString errorText READ errorText NOTIFY stateChanged)
+    /// 实际使用的解码路径（"PCM WAV 直读" / "解码器"）：排查"为什么音质/时长不对"的第一条线索
+    Q_PROPERTY(QString decodeRoute READ decodeRoute NOTIFY resultChanged)
+
+    // ---------------- 钢琴卷帘（渲染在 C++，界面与导出共用同一份实现）----------------
+    /// 卷帘图像版本号：结果变化时自增，QML 的 Image 据此换 URL（QML 侧不做任何绘制）
+    Q_PROPERTY(int rollRevision READ rollRevision NOTIFY resultChanged)
+    /// 卷帘整图尺寸（QML 用它设置 Image 的宽高，从而获得 1:1 显示 + 横向滚动）
+    Q_PROPERTY(int rollWidthPx READ rollWidthPx NOTIFY resultChanged)
+    Q_PROPERTY(int rollHeightPx READ rollHeightPx NOTIFY resultChanged)
+    /// 时长（秒）与覆盖的 MIDI 音域（界面显示用）
+    Q_PROPERTY(double durationSec READ durationSec NOTIFY resultChanged)
+    Q_PROPERTY(int lowestMidi READ lowestMidi NOTIFY resultChanged)
+    Q_PROPERTY(int highestMidi READ highestMidi NOTIFY resultChanged)
+    /// 是否已有可画的结果
+    Q_PROPERTY(bool hasResult READ hasResult NOTIFY resultChanged)
+
+    // 卷帘的绘制参数（界面与导出共用；导出只是把宽度上限放大）
+    //
+    // 为什么显示与导出要分开两个宽度上限：屏幕上那张图最终会成为一张 GPU 纹理，
+    // 而不少手机 GPU 的纹理上限是 4096 像素——超了会直接不显示（比"糊"更糟）。
+    // 导出成 PNG 不受该限制，所以长图导出可以用更大的宽度换更高的时间分辨率。
+public:
+    static constexpr int kDisplayMaxWidthPx = 3800;
+    static constexpr double kDisplayPxPerSecond = 130.0;
+    static constexpr int kExportMaxWidthPx = 12000;
+    static constexpr int kRollPxPerSemitone = 15;
+    static constexpr int kRollKeyboardWidthPx = 52;
+    static constexpr int kRollAxisHeightPx = 22;
+
+private:
+    // （无私有成员声明节——属性与常量见上；成员变量在文件末尾）
 
 public:
-    explicit FileAnalysisController(QObject* parent = nullptr);
+    /// @param theme 主题令牌来源（卷帘配色从这里折算，避免出现"第二处颜色定义"）；
+    ///              可为空——无界面自检（`--selftest`）会这样构造，它不渲染卷帘
+    explicit FileAnalysisController(ThemeProvider* theme = nullptr, QObject* parent = nullptr);
     ~FileAnalysisController() override;
 
     QString stateText() const { return m_stateText; }
@@ -122,8 +156,24 @@ public:
     int sampleRate() const { return m_sampleRate; }
     int frameCount() const { return m_model.count(); }
     QString errorText() const { return m_errorText; }
+    QString decodeRoute() const { return m_decodeRoute; }
     /// 曲线预览：一条 QVariantMap，键为 points / freqMin / freqMax / totalFrames / sampledFrames。
     QVariantMap preview() const;
+
+    int rollRevision() const { return m_rollRevision; }
+    int rollWidthPx() const { return m_geometry.widthPx; }
+    int rollHeightPx() const { return m_geometry.heightPx; }
+    double durationSec() const { return m_geometry.durationSec; }
+    int lowestMidi() const { return m_geometry.lowestMidi; }
+    int highestMidi() const { return m_geometry.highestMidi; }
+    bool hasResult() const { return m_model.count() > 0; }
+
+    /// 渲染卷帘整图（供 QQuickImageProvider 与导出共用；**同一份几何与配色**）。
+    /// @param maxWidthPx 宽度上限：界面显示用小一点（受 GPU 纹理上限约束），导出可以大很多
+    ///
+    /// **没有分析结果时也会返回一张图**（键盘 + 网格 + 时间轴常显，只是没有曲线）——
+    /// 用户要求"卷帘区域应该常显"：空着比画一张空卷帘更让人以为功能坏了。
+    QImage renderRollImage(int maxWidthPx, double preferredPxPerSecond) const;
 
 public slots:
     /// 载入音频文件（只读 WAV）并立即开始分析。
@@ -132,9 +182,13 @@ public slots:
     /// 取消当前分析（下一帧循环检查后退出）。
     void cancel();
 
-    /// 把逐帧结果写到 CSV 文件。
-    /// @return 成功与否；失败原因见 errorText
-    bool exportCsv(const QString& path);
+    /// 弹出原生保存对话框，把钢琴卷帘导出成**一张长图**（PNG）。
+    /// 取代原来的"导出逐帧 CSV"（用户 2026-09-30：CSV 换成整段长图，看图比看数字有用）。
+    /// @return 实际保存的路径；取消或失败返回空串（失败原因见 errorText）
+    Q_INVOKABLE QString exportRollImage();
+
+    /// 清空当前结果（换文件/重新录音前调用）。
+    Q_INVOKABLE void clearResult();
 
     /// 是否已载入可用于实时回放的文件（供"用文件验证实时链路"用）。
     Q_INVOKABLE bool hasPlayableFile() const { return !m_loadedPath.isEmpty(); }
@@ -163,6 +217,8 @@ private slots:
 private:
     void setState(const QString& text, const QString& error);
     void moveToWorkerAndStart();
+    /// 卷帘配色（从主题令牌折算；主题为空时用一套保守默认值）
+    RollPalette rollPalette() const;
 
     FrameTableModel m_model;
     QString m_stateText = QStringLiteral("未载入文件");
@@ -171,7 +227,17 @@ private:
     QString m_fileName;
     QString m_loadedPath;
     QString m_lastDir;                 ///< 上次选文件的目录
+    QString m_decodeRoute;             ///< 实际走通的解码路径（显示给用户）
     int m_sampleRate = 0;
+
+    // 卷帘：几何在分析完成后按帧数据算一次；图像版本号用于让 QML 的 Image 换 URL
+    ThemeProvider* m_theme = nullptr;
+    RollGeometry m_geometry{};
+    int m_rollRevision = 0;
+
+    // 解码在主线程完成后把样点交给工作线程（见 analyze() 的说明：解码快、分析慢，分开更稳）
+    std::vector<float> m_pendingSamples;
+    double m_pendingSampleRate = 0.0;
 
     QThread m_worker;
     std::atomic<bool> m_analyzing{false};

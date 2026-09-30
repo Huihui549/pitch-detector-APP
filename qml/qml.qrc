@@ -1,17 +1,17 @@
 <!DOCTYPE RCC>
 <!--
-  QML 资源清单（qmake 方案）
+  QML 璧勬簮娓呭崟锛坬make 鏂规锛?
 
-  把 qml/ 目录按 /PitchDetector 前缀编进可执行文件，资源内布局：
+  鎶?qml/ 鐩綍鎸?/PitchDetector 鍓嶇紑缂栬繘鍙墽琛屾枃浠讹紝璧勬簮鍐呭竷灞€锛?
       :/PitchDetector/qmldir
       :/PitchDetector/Main.qml
       :/PitchDetector/components/...
       :/PitchDetector/pages/...
 
-  main.cpp 里 addImportPath(":/") + loadFromModule("PitchDetector", "Main")。
+  main.cpp 閲?addImportPath(":/") + loadFromModule("PitchDetector", "Main")銆?
 
-  注意：qmake 不会自动生成 qmldir（那是 CMake 的 qt_add_qml_module 才做的事），
-  qml/qmldir 由本工程手工维护，新增 QML 文件时必须在这里与 qmldir 中同步登记。
+  娉ㄦ剰锛歲make 涓嶄細鑷姩鐢熸垚 qmldir锛堥偅鏄?CMake 鐨?qt_add_qml_module 鎵嶅仛鐨勪簨锛夛紝
+  qml/qmldir 鐢辨湰宸ョ▼鎵嬪伐缁存姢锛屾柊澧?QML 鏂囦欢鏃跺繀椤诲湪杩欓噷涓?qmldir 涓悓姝ョ櫥璁般€?
 -->
 <RCC>
     <qresource prefix="/PitchDetector">
@@ -27,7 +27,6 @@
         <file>components/NoteDisplay.qml</file>
         <file>components/PageHeader.qml</file>
         <file>components/PageScroller.qml</file>
-        <file>components/PitchCurve.qml</file>
         <file>components/StatCard.qml</file>
         <file>components/ValueSlider.qml</file>
         <file>pages/DebugPage.qml</file>
@@ -35,6 +34,5 @@
         <file>pages/LivePage.qml</file>
         <file>pages/MetronomePage.qml</file>
         <file>pages/MorePage.qml</file>
-        <file>pages/RangePage.qml</file>
     </qresource>
 </RCC>

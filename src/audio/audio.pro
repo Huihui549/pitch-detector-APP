@@ -22,10 +22,14 @@ QT += core
 QMAKE_CXXFLAGS += -std=c++20 -Wall -Wextra -Wpedantic -Wshadow
 
 SOURCES += \
+    audio-file-decoder.cpp \
+    audio-recorder.cpp \
     file-audio-source.cpp \
     metronome-engine.cpp
 
 HEADERS += \
+    audio-file-decoder.h \
+    audio-recorder.h \
     i-audio-source.h \
     file-audio-source.h \
     metronome-engine.h

@@ -1,19 +1,19 @@
-# QML 模块声明（手写：qmake 没有 qt_add_qml_module，不会自动生成）
+# QML 妯″潡澹版槑锛堟墜鍐欙細qmake 娌℃湁 qt_add_qml_module锛屼笉浼氳嚜鍔ㄧ敓鎴愶級
 #
-# 位置：与 qml.qrc 的 /PitchDetector 前缀对应，资源内路径为 :/PitchDetector/qmldir。
+# 浣嶇疆锛氫笌 qml.qrc 鐨?/PitchDetector 鍓嶇紑瀵瑰簲锛岃祫婧愬唴璺緞涓?:/PitchDetector/qmldir銆?
 #
-# 重要限制（实测）：本工程用 qmake 时，**本文件的命名类型不会被解析**。
-#   现象：界面能被创建，但整份 QML 里对 Theme / 组件名的引用报 ReferenceError（230 行）。
-#   同样的写法在 CMake 的 qt_add_qml_module 下正常——差异在于后者会生成模块插件并注册类型表。
-#   因此本项目把需要"跨文件按名访问"的类型（Theme）改为 **C++ 单例**，
-#   经 qmlRegisterSingletonInstance 注册（见 src/app/theme.h 与 main.cpp），
-#   与 Session / FileAnalysis 走同一条已验证可用的路径。
+# 閲嶈闄愬埗锛堝疄娴嬶級锛氭湰宸ョ▼鐢?qmake 鏃讹紝**鏈枃浠剁殑鍛藉悕绫诲瀷涓嶄細琚В鏋?*銆?
+#   鐜拌薄锛氱晫闈㈣兘琚垱寤猴紝浣嗘暣浠?QML 閲屽 Theme / 缁勪欢鍚嶇殑寮曠敤鎶?ReferenceError锛?30 琛岋級銆?
+#   鍚屾牱鐨勫啓娉曞湪 CMake 鐨?qt_add_qml_module 涓嬫甯糕€斺€斿樊寮傚湪浜庡悗鑰呬細鐢熸垚妯″潡鎻掍欢骞舵敞鍐岀被鍨嬭〃銆?
+#   鍥犳鏈」鐩妸闇€瑕?璺ㄦ枃浠舵寜鍚嶈闂?鐨勭被鍨嬶紙Theme锛夋敼涓?**C++ 鍗曚緥**锛?
+#   缁?qmlRegisterSingletonInstance 娉ㄥ唽锛堣 src/app/theme.h 涓?main.cpp锛夛紝
+#   涓?Session / FileAnalysis 璧板悓涓€鏉″凡楠岃瘉鍙敤鐨勮矾寰勩€?
 #
-# 本文件保留的作用：
-#   ① 声明模块名与资源基准（prefer），便于将来改用 qt_add_qml_module 时平滑迁移
-#   ② 记录各 QML 文件的位置与用途（新增文件时同步登记）
+# 鏈枃浠朵繚鐣欑殑浣滅敤锛?
+#   鈶?澹版槑妯″潡鍚嶄笌璧勬簮鍩哄噯锛坧refer锛夛紝渚夸簬灏嗘潵鏀圭敤 qt_add_qml_module 鏃跺钩婊戣縼绉?
+#   鈶?璁板綍鍚?QML 鏂囦欢鐨勪綅缃笌鐢ㄩ€旓紙鏂板鏂囦欢鏃跺悓姝ョ櫥璁帮級
 #
-# 编码要求：UTF-8 **无 BOM**（带 BOM 时解析行为异常，见坑 A20）。
+# 缂栫爜瑕佹眰锛歎TF-8 **鏃?BOM**锛堝甫 BOM 鏃惰В鏋愯涓哄紓甯革紝瑙佸潙 A20锛夈€?
 
 module PitchDetector
 prefer :/PitchDetector/
@@ -27,7 +27,6 @@ IconButton 1.0 components/IconButton.qml
 LevelMeter 1.0 components/LevelMeter.qml
 NoteDisplay 1.0 components/NoteDisplay.qml
 PageHeader 1.0 components/PageHeader.qml
-PitchCurve 1.0 components/PitchCurve.qml
 StatCard 1.0 components/StatCard.qml
 ValueSlider 1.0 components/ValueSlider.qml
 
@@ -36,4 +35,3 @@ FilePage 1.0 pages/FilePage.qml
 LivePage 1.0 pages/LivePage.qml
 MetronomePage 1.0 pages/MetronomePage.qml
 MorePage 1.0 pages/MorePage.qml
-RangePage 1.0 pages/RangePage.qml

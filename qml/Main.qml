@@ -27,11 +27,11 @@ ApplicationWindow {
     color: Theme.background
 
     // 导航项：icon 取 resources/icons 里的文件名（Lucide 图标集，清单见 ATTRIBUTION.md）
+    // 音域测量页已并入「实时」页（2026-09-30 用户要求），故导航回到 4 项
     readonly property var navItems: [
         { key: "live", label: qsTr("实时"), icon: "activity" },
         { key: "metro", label: qsTr("节拍器"), icon: "metronome" },
-        { key: "file", label: qsTr("文件"), icon: "file-audio" },
-        { key: "range", label: qsTr("音域"), icon: "gauge" },
+        { key: "file", label: qsTr("录音分析"), icon: "file-audio" },
         { key: "more", label: qsTr("更多"), icon: "ellipsis" }
     ]
 
@@ -66,7 +66,6 @@ ApplicationWindow {
             LivePage { }
             MetronomePage { }
             FilePage { }
-            RangePage { }
             MorePage { }
             DebugPage { }
         }
@@ -86,9 +85,8 @@ ApplicationWindow {
         case "live": return 0;
         case "metro": return 1;
         case "file": return 2;
-        case "range": return 3;
-        case "more": return 4;
-        case "debug": return 5;
+        case "more": return 3;
+        case "debug": return 4;
         default: return 0;
         }
     }
@@ -98,7 +96,6 @@ ApplicationWindow {
         case "live": return qsTr("实时音高");
         case "metro": return qsTr("节拍器");
         case "file": return qsTr("录音分析");
-        case "range": return qsTr("音域测量");
         case "more": return qsTr("更多");
         case "debug": return qsTr("调试（长按退出）");
         default: return qsTr("音高检测");

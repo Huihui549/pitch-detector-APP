@@ -40,27 +40,14 @@ Item {
         anchors.fill: parent
 
         // ---------- 1. 采集控制 ----------
-        RowLayout {
+        // 只有"开始/停止监听"一个按钮：文件选择属"录音分析"页，不在这里出现（2026-09-30 用户要求）
+        ActionButton {
             Layout.fillWidth: true
-            spacing: Theme.spacing
-
-            ActionButton {
-                Layout.fillWidth: true
-                primary: true
-                icon: Session.running ? "square" : "mic"
-                text: Session.running ? qsTr("停止监听") : qsTr("开始监听")
-                enabled: Session.running || Session.unavailableReason === ""
-                onClicked: Session.running ? Session.stop() : Session.startMicrophone()
-            }
-
-            ActionButton {
-                Layout.fillWidth: true
-                primary: false
-                icon: "folder-open"
-                text: qsTr("选择音频文件")
-                // 走 C++ 的原生 QFileDialog：QML FileDialog 在 Windows 上返回的路径不可靠
-                onClicked: Session.chooseAudioFileAndPlay()
-            }
+            primary: true
+            icon: Session.running ? "square" : "mic"
+            text: Session.running ? qsTr("停止监听") : qsTr("开始监听")
+            enabled: Session.running || Session.unavailableReason === ""
+            onClicked: Session.running ? Session.stop() : Session.startMicrophone()
         }
 
         // ---------- 2. 状态行 ----------
@@ -185,59 +172,79 @@ Item {
             }
         }
 
-        // ---------- 5. 音高曲线 ----------
+        // ---------- 5. 音域（原「音域测量」页已并入本页，2026-09-30 用户要求） ----------
+        // 原页的"当前音"就是上面的主读数，故这里只保留极值与跨度，避免同一信息出现两遍。
         Card {
             Layout.fillWidth: true
-            // 滚动容器里 `fillHeight` 没有意义（高度由内容决定），给固定高度
-            Layout.preferredHeight: 220
 
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
                 Icon {
-                    name: "waves"
+                    name: "gauge"
                     size: Theme.iconSm
                     color: Theme.textDim
                 }
                 Text {
-                    text: qsTr("近 5 秒音高")
+                    text: qsTr("本次音域")
                     color: Theme.textDim
                     font.pixelSize: Theme.fontMicro
                 }
                 Item { Layout.fillWidth: true }
+                Text {
+                    text: Session.rangeSemitones > 0
+                          ? qsTr("约 %1 个八度").arg((Session.rangeSemitones / 12).toFixed(2))
+                          : qsTr("尚无数据")
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fontMicro
+                }
             }
 
-            PitchCurve {
+            RowLayout {
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumHeight: 90
-                points: Session.curve
-                referenceLines: []
-                freqMin: {
-                    // 纵轴范围由界面按当前数据自适应：只是为了画得好看，不参与判定
-                    var pts = Session.curve;
-                    if (!pts || pts.length === 0)
-                        return 0;
-                    var lo = pts[0].freq, hi = pts[0].freq;
-                    for (var i = 1; i < pts.length; ++i) {
-                        lo = Math.min(lo, pts[i].freq);
-                        hi = Math.max(hi, pts[i].freq);
-                    }
-                    var pad = Math.max(1, (hi - lo) * 0.15);
-                    return lo - pad;
+                spacing: Theme.spacing
+
+                StatCard {
+                    Layout.fillWidth: true
+                    label: qsTr("本次最高音")
+                    value: Session.highestNote
+                    valueColor: Theme.warn
                 }
-                freqMax: {
-                    var pts = Session.curve;
-                    if (!pts || pts.length === 0)
-                        return 0;
-                    var lo = pts[0].freq, hi = pts[0].freq;
-                    for (var i = 1; i < pts.length; ++i) {
-                        lo = Math.min(lo, pts[i].freq);
-                        hi = Math.max(hi, pts[i].freq);
-                    }
-                    var pad = Math.max(1, (hi - lo) * 0.15);
-                    return hi + pad;
+
+                StatCard {
+                    Layout.fillWidth: true
+                    label: qsTr("本次最低音")
+                    value: Session.lowestNote
+                    valueColor: Theme.ok
                 }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: Session.rangeSemitones > 0
+                      ? qsTr("跨度 %1 个半音　·　累计有效时长 %2 s")
+                            .arg(Session.rangeSemitones)
+                            .arg(Session.validSeconds.toFixed(1))
+                      : qsTr("从低到高唱/奏一遍，这里会记下最高与最低音")
+                color: Theme.text
+                font.pixelSize: Theme.fontSmall
+                wrapMode: Text.WordWrap
+            }
+
+            ActionButton {
+                Layout.fillWidth: true
+                primary: false
+                icon: "refresh-cw"
+                text: qsTr("清零音域统计")
+                onClicked: Session.resetStatistics()
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("极值只在置信度达标且连续命中 ≥3 帧时更新，避免单帧误判把音域拉虚。")
+                color: Theme.textDim
+                font.pixelSize: Theme.fontMicro
+                wrapMode: Text.WordWrap
             }
         }
 

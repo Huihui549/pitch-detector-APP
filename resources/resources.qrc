@@ -12,6 +12,8 @@
 -->
 <RCC>
     <qresource prefix="/resources">
+        <file>piano/key-white.svg</file>
+        <file>piano/key-black.svg</file>
         <file>icons/activity.svg</file>
         <file>icons/bug.svg</file>
         <file>icons/check.svg</file>

@@ -15,10 +15,14 @@
 #include "file-analysis-controller.h"
 
 #include "analysis-runner.h"
+#include "audio-file-decoder.h"   // 主流格式（mp3/m4a/aac/flac）+ PCM WAV 两级解码
 #include "note-converter.h"
+#include "piano-roll-renderer.h"  // 卷帘渲染（界面显示与导出长图共用同一实现）
+#include "theme.h"                // 卷帘配色从主题令牌折算
 #include "wav-reader.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -90,25 +94,8 @@ void FrameTableModel::clear() {
     endResetModel();
 }
 
-QString FrameTableModel::toCsv() const {
-    if (m_frames.empty()) {
-        return {};
-    }
-    QString out;
-    // 列沿用上游导出口径（timestamp/freq/note/cents/confidence），另加 rms 与 octaveFixed 便于排查
-    out += QStringLiteral("timestamp,freq,note,cents,confidence,rms,octaveFixed\n");
-    for (const Frame& f : m_frames) {
-        out += QStringLiteral("%1,%2,%3,%4,%5,%6,%7\n")
-                   .arg(f.timeSec, 0, 'f', 4)
-                   .arg(f.freq, 0, 'f', 4)
-                   .arg(QString::fromLatin1(NoteConverter::format(f.noteIndex, f.octave)))
-                   .arg(f.cents, 0, 'f', 2)
-                   .arg(f.confidence, 0, 'f', 4)
-                   .arg(f.rms, 0, 'f', 6)
-                   .arg(f.octaveFixed ? 1 : 0);
-    }
-    return out;
-}
+// 说明：原来的 `toCsv()` 已删除（用户 2026-09-30：导出 CSV 改为导出钢琴卷帘长图）。
+// 逐帧数据仍通过本模型的 role 提供给界面表格，只是不再有 CSV 导出这条路径。
 
 CurvePreview buildCurvePreview(const std::vector<Frame>& frames, int maxPoints) {
     CurvePreview preview;
@@ -152,7 +139,12 @@ CurvePreview buildCurvePreview(const std::vector<Frame>& frames, int maxPoints) 
 
 /* ============================ FileAnalysisController ============================ */
 
-FileAnalysisController::FileAnalysisController(QObject* parent) : QObject(parent) {
+FileAnalysisController::FileAnalysisController(ThemeProvider* theme, QObject* parent)
+    : QObject(parent), m_theme(theme) {
+    // 卷帘区域**从一打开就存在**（用户要求常显）：先按默认音域/时长算好几何，
+    // QML 因此一开始就能拿到非零的 rollWidthPx/rollHeightPx 并显示空卷帘。
+    m_geometry = computeRollGeometry(57, 72, 8.0, kDisplayMaxWidthPx, kDisplayPxPerSecond,
+                                    kRollPxPerSemitone, kRollKeyboardWidthPx, kRollAxisHeightPx);
     m_progressTimer.setInterval(100);
     connect(&m_progressTimer, &QTimer::timeout, this, &FileAnalysisController::pollProgress);
     // 线程启动即执行分析（对象已在 analyze() 里移到该线程）
@@ -191,14 +183,62 @@ void FileAnalysisController::setState(const QString& text, const QString& error)
 QString FileAnalysisController::chooseAndAnalyze() {
     // 原生对话框：QML 的 FileDialog 在 Windows 上返回的路径不可靠（用户实测"无法载入"）
     const QString path = QFileDialog::getOpenFileName(
-        nullptr, QStringLiteral("选择要分析的音频（未压缩 PCM WAV）"), m_lastDir,
-        QStringLiteral("WAV 音频 (*.wav);;所有文件 (*)"));
+        nullptr, QStringLiteral("选择要分析的音频（主流格式均可）"), m_lastDir,
+        pitch::audioFileFilter());
     if (path.isEmpty()) {
         return {};
     }
     m_lastDir = QFileInfo(path).absolutePath();
     analyze(path);
     return path;
+}
+
+QString FileAnalysisController::exportRollImage() {
+    if (!hasResult()) {
+        setState(m_stateText, QStringLiteral("还没有可导出的分析结果"));
+        return {};
+    }
+    const QString suggested =
+        m_lastDir.isEmpty() ? QStringLiteral("piano-roll.png")
+                            : m_lastDir + QStringLiteral("/piano-roll.png");
+    // 原生保存对话框：与"选择文件"同一条已验证可靠的路（QML FileDialog 在 Windows 上不可靠）
+    const QString path = QFileDialog::getSaveFileName(
+        nullptr, QStringLiteral("导出钢琴卷帘长图（PNG）"), suggested,
+        QStringLiteral("PNG 图片 (*.png)"));
+    if (path.isEmpty()) {
+        return {};
+    }
+    // 导出用**同一份**渲染实现（见 renderRollImage），只是把宽度上限放大：
+    // 于是导出的长图与屏幕上看到的完全一致，只是分辨率更高（长录音才会有差别）。
+    const QImage image = renderRollImage(kExportMaxWidthPx, kDisplayPxPerSecond);
+    QString error;
+    if (!saveRollPng(image, path, &error)) {
+        setState(m_stateText, error);
+        return {};
+    }
+    m_lastDir = QFileInfo(path).absolutePath();
+    setState(QStringLiteral("已导出长图：%1（%2 × %3 像素）")
+                 .arg(QFileInfo(path).fileName())
+                 .arg(image.width())
+                 .arg(image.height()),
+             QString());
+    return path;
+}
+
+void FileAnalysisController::clearResult() {
+    if (m_analyzing.load()) {
+        cancel();
+        return;
+    }
+    m_model.clear();
+    m_summary.clear();
+    m_fileName.clear();
+    m_loadedPath.clear();
+    m_decodeRoute.clear();
+    m_geometry = RollGeometry{};
+    ++m_rollRevision;
+    setState(QStringLiteral("未载入文件"), QString());
+    emit resultChanged();
 }
 
 void FileAnalysisController::analyze(const QString& path) {
@@ -226,9 +266,27 @@ void FileAnalysisController::analyze(const QString& path) {
     m_progress.store(0.0);
     m_analyzing.store(true);
 
-    setState(QStringLiteral("分析中…"), QString());
+    // ---- 解码放在主线程完成，再把样点交给工作线程做重活 ----
+    // 为什么分开：解码（尤其 mp3/m4a）走 Qt Multimedia 的**异步**解码器，需要事件循环；
+    // 而"分析"是纯计算且耗时长（88 键素材要几十秒），必须留在工作线程里，否则界面会假死。
+    setState(QStringLiteral("解码中…"), QString());
     emit resultChanged();
     emit progressChanged();
+
+    const DecodedAudio decoded = decodeAudioFile(local);
+    if (!decoded.ok) {
+        m_analyzing.store(false);
+        setState(QStringLiteral("载入失败"), decoded.error);
+        emit finished(false);
+        return;
+    }
+    m_pendingSamples = decoded.samples;
+    m_pendingSampleRate = decoded.sampleRate;
+    m_decodeRoute = decoded.route;
+    m_sampleRate = static_cast<int>(std::lround(decoded.sampleRate));
+
+    setState(QStringLiteral("分析中…"), QString());
+    emit resultChanged();
 
     m_progressTimer.start();
     // 顺序不能反：先移线程再 start；反过来会把工作线程的事件循环一起搬走
@@ -247,30 +305,24 @@ void FileAnalysisController::pollProgress() {
 
 void FileAnalysisController::runAnalysis() {
     // ===== 以下在工作线程执行：只碰数据 =====
-    // 路径统一按 **UTF-8** 传入：不要用 QString::toStdString()（那是本地代码页）。
-    // Windows 上 readWavMono 内部转 UTF-16 再打开，中文路径才不会失败（坑 A29，实测踩过）；
-    // Android/Linux 的文件名本就是 UTF-8 字节。
-    const WavData wav = readWavMono(m_loadedPath.toUtf8().toStdString());
-
-    if (!wav.ok) {
-        m_errorText = QStringLiteral("无法读取音频：%1（只支持未压缩 PCM WAV）")
-                          .arg(QString::fromStdString(wav.error));
+    // 样点已在主线程解码完成（见 analyze() 的说明），这里只做纯计算的分析。
+    if (m_pendingSamples.empty() || m_pendingSampleRate <= 0.0) {
+        m_errorText = QStringLiteral("没有可分析的样点（解码结果为空）");
         m_pendingOk = false;
-        // 回到主线程再收尾
         this->moveToThread(QCoreApplication::instance()->thread());
         m_worker.quit();
         QMetaObject::invokeMethod(this, "onAnalysisCompleted", Qt::QueuedConnection);
         return;
     }
 
-    m_sampleRate = static_cast<int>(std::lround(wav.sampleRate));
+    m_sampleRate = static_cast<int>(std::lround(m_pendingSampleRate));
 
     // 帧进 441 样点 = 10 ms（上游文件分析口径：精度优先，允许非实时）
     constexpr std::size_t kHop = 441;
     const EngineConfig cfg;
     const Analysis analysis = AnalysisRunner::analyze(
-        std::span<const float>(wav.samples.data(), wav.samples.size()),
-        wav.sampleRate, kHop, cfg,
+        std::span<const float>(m_pendingSamples.data(), m_pendingSamples.size()),
+        m_pendingSampleRate, kHop, cfg,
         [this](double p) { m_progress.store(std::min(1.0, std::max(0.0, p))); },
         nullptr);
 
@@ -294,7 +346,7 @@ void FileAnalysisController::runAnalysis() {
         }
         QString summary;
         summary += QStringLiteral("文件：%1\n").arg(m_fileName);
-        summary += QStringLiteral("采样率：%1 Hz\n").arg(m_sampleRate);
+        summary += QStringLiteral("采样率：%1 Hz（%2）\n").arg(m_sampleRate).arg(m_decodeRoute);
         summary += QStringLiteral("有效帧：%1（帧进 10 ms）\n").arg(analysis.frames.size());
         summary += QStringLiteral("众数音名：%1（%2 帧，占 %3%）\n")
                        .arg(QString::fromStdString(modeNote))
@@ -324,6 +376,47 @@ void FileAnalysisController::runAnalysis() {
     QMetaObject::invokeMethod(this, "onAnalysisCompleted", Qt::QueuedConnection);
 }
 
+RollPalette FileAnalysisController::rollPalette() const {
+    // 主题为空（无界面自检）时给一套保守配色：不允许"没有主题就画不出图"
+    if (m_theme == nullptr) {
+        RollPalette fallback;
+        fallback.background = QColor(0x0b, 0x0f, 0x14);
+        fallback.rowAlt = QColor(0x1a, 0x22, 0x2c);
+        fallback.gridLine = QColor(0x26, 0x30, 0x3c);
+        fallback.gridStrong = QColor(0x93, 0xa2, 0xb4);
+        fallback.axisText = QColor(0x93, 0xa2, 0xb4);
+        fallback.axisLine = QColor(0x26, 0x30, 0x3c);
+        fallback.curve = QColor(0x2e, 0xd3, 0xb7);
+        fallback.curveGlow = QColor(0x17, 0x56, 0x4c);
+        fallback.surface = QColor(0x12, 0x18, 0x21);
+        fallback.text = QColor(0xf2, 0xf6, 0xfa);
+        fallback.keyLabelOnDark = QColor(0xee, 0xf2, 0xf6);
+        return fallback;
+    }
+    return rollPaletteFromTheme(*m_theme);
+}
+
+QImage FileAnalysisController::renderRollImage(int maxWidthPx, double preferredPxPerSecond) const {
+    const std::vector<Frame>& frames = m_model.frames();
+
+    // 没有结果时**也画一张**：只有键盘、网格与时间轴（用户要求"卷帘区域常显"）。
+    // 默认音域取 A3–C5（单音练习最常见的范围），默认时长 8 秒，时间刻度照样画出来。
+    if (frames.empty()) {
+        const RollGeometry geom = computeRollGeometry(57, 72, 8.0, maxWidthPx, preferredPxPerSecond,
+                                                     kRollPxPerSemitone, kRollKeyboardWidthPx,
+                                                     kRollAxisHeightPx);
+        return renderPianoRoll({}, geom, rollPalette(), kDefaultA4);
+    }
+
+    int lowest = 0;
+    int highest = 0;
+    midiRangeOf(frames, kDefaultA4, &lowest, &highest);
+    const RollGeometry geom = computeRollGeometry(lowest, highest, durationOf(frames), maxWidthPx,
+                                                 preferredPxPerSecond, kRollPxPerSemitone,
+                                                 kRollKeyboardWidthPx, kRollAxisHeightPx);
+    return renderPianoRoll(frames, geom, rollPalette(), kDefaultA4);
+}
+
 void FileAnalysisController::onAnalysisCompleted() {
     // ===== 以下在主线程执行：可以安全地更新模型与发信号 =====
     m_progressTimer.stop();
@@ -333,31 +426,24 @@ void FileAnalysisController::onAnalysisCompleted() {
     if (m_pendingOk) {
         m_model.setFrames(std::move(m_pendingFrames));
         m_pendingFrames.clear();
+        // 卷帘几何按结果算一次，并自增版本号让 QML 的 Image 换 URL（重新取图）
+        int lowest = 0;
+        int highest = 0;
+        midiRangeOf(m_model.frames(), kDefaultA4, &lowest, &highest);
+        m_geometry = computeRollGeometry(lowest, highest, durationOf(m_model.frames()),
+                                        kDisplayMaxWidthPx, kDisplayPxPerSecond, kRollPxPerSemitone,
+                                        kRollKeyboardWidthPx, kRollAxisHeightPx);
+        ++m_rollRevision;
     }
+    // 样点已用完就释放（一段几分钟的录音是几十 MB，留着没意义）
+    m_pendingSamples.clear();
+    m_pendingSamples.shrink_to_fit();
+    m_pendingSampleRate = 0.0;
     setState(m_pendingOk ? QStringLiteral("分析完成") : QStringLiteral("无有效音高"),
              m_pendingOk ? QString() : m_errorText);
     emit progressChanged();
     emit resultChanged();
     emit finished(m_pendingOk);
-}
-
-bool FileAnalysisController::exportCsv(const QString& path) {
-    const QString csv = m_model.toCsv();
-    if (csv.isEmpty()) {
-        setState(m_stateText, QStringLiteral("没有可导出的数据（请先分析一个音频文件）"));
-        return false;
-    }
-    const QString local = path.startsWith(QStringLiteral("file://")) ? path.mid(7) : path;
-    QFile file(local);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        setState(m_stateText, QStringLiteral("无法写入文件：%1").arg(file.errorString()));
-        return false;
-    }
-    QTextStream out(&file);
-    out << csv;
-    file.close();
-    setState(QStringLiteral("已导出 CSV：%1").arg(local), QString());
-    return true;
 }
 
 } // namespace pitch

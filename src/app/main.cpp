@@ -8,14 +8,19 @@
 // 理由：无头环境下我无法点击界面，但必须能**自动验证**"WAV → 算法 → 对外数据"这段是否真的通。
 
 #include "file-analysis-controller.h"
+#include "audio-recorder.h"
 #include "metronome-check.h"
 #include "metronome-controller.h"
+#include "piano-roll-image-provider.h"
 #include "pitch-session-controller.h"
+#include "recorder-controller.h"
+#include "roll-check.h"
 #include "storage-access.h"
 #include "theme.h"
 #include "wav-reader.h"
 
 #include <QApplication>          // 需要它才能用 QFileDialog（QWidget 类必须有 QApplication）
+#include <QIcon>                 // 窗口/任务栏图标
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFile>
@@ -33,6 +38,7 @@
 #include <QAudioDevice>
 #include <QAudioFormat>
 #include <QMediaDevices>
+#include <QMediaFormat>
 #endif
 
 #include <cstdio>
@@ -177,6 +183,13 @@ int main(int argc, char* argv[]) {
     app.setApplicationName(QStringLiteral("pitch-detector-APP"));
     app.setApplicationVersion(QStringLiteral("0.1.0"));
     app.setOrganizationName(QStringLiteral("pitch-detector"));
+    // 窗口/任务栏图标。Windows 上 exe 的**文件图标**由 app.pro 的 RC_ICONS 决定（那是资源管理器里看到的），
+    // 这里再设一次是为了窗口标题栏与任务栏在运行时也用它（两条路各管一段，缺一个都会看到默认图标）。
+    // 用 SVG 资源：QtSvg 已链接，且与 exe 图标同源（都由 resources/branding/app-icon.svg 派生）。
+    // 注意 setWindowIcon 属于 QGuiApplication：无头自检走的是 QCoreApplication，故这里要判类型。
+    if (auto* guiApp = qobject_cast<QGuiApplication*>(&app)) {
+        guiApp->setWindowIcon(QIcon(QStringLiteral(":/resources/branding/app-icon.svg")));
+    }
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("音高检测工具（手机界面形态的 Qt 实现）"));
@@ -226,6 +239,22 @@ int main(int argc, char* argv[]) {
         QStringLiteral("page"),
         QStringLiteral("启动时直接切到指定页面（live/file/range/metro/more/debug）：供截图与排查用"),
         QStringLiteral("key"));
+    QCommandLineOption recFormatsOption(
+        QStringLiteral("recformats"),
+        QStringLiteral("罗列 Qt Multimedia 支持「录制（编码）」与「解码」的容器/音频编码："
+                       "用于确认「保存为 mp3」在本机后端是否可行"));
+    QCommandLineOption recProbeOption(
+        QStringLiteral("recprobe"),
+        QStringLiteral("录音落盘探针：打印本实例**协商到的录制格式与扩展名**，并真的尝试开始录音"
+                       "（退出码 0 = 真录上了；2 = 本机没有输入设备这类环境限制）"));
+    QCommandLineOption rollCheckOption(
+        QStringLiteral("rollcheck"),
+        QStringLiteral("钢琴卷帘离线自检：解码 → 分析 → 渲染 → 像素断言 → 保存 PNG（参数为音频路径）"),
+        QStringLiteral("audio"));
+    QCommandLineOption rollOutOption(
+        QStringLiteral("rollout"),
+        QStringLiteral("配合 --rollcheck：指定输出 PNG 路径"),
+        QStringLiteral("png"));
     parser.addOption(selfTestOption);
     parser.addOption(expectOption);
     parser.addOption(qmlCheckOption);
@@ -238,7 +267,43 @@ int main(int argc, char* argv[]) {
     parser.addOption(metroWavOption);
     parser.addOption(metroLiveOption);
     parser.addOption(pageOption);
+    parser.addOption(recFormatsOption);
+    parser.addOption(recProbeOption);
+    parser.addOption(rollCheckOption);
+    parser.addOption(rollOutOption);
     parser.process(app);
+
+    if (parser.isSet(recProbeOption)) {
+        // 直接回答"保存录音到底能不能产出 mp3"：把**本实例协商到的格式**打出来，并真的尝试录一次。
+        // 没有输入设备时录不起来，这时退出码 2 = 环境限制（不是代码错误），据此可分清"没实现"与"没法测"。
+        QTextStream out(stdout);
+        pitch::AudioRecorder recorder;
+        out << "输入设备：" << (recorder.available() ? QStringLiteral("有") : recorder.unavailableReason())
+            << "\n";
+        out << "本实例协商到的录制格式：" << recorder.description() << "\n";
+        out << "保存扩展名：." << recorder.containerExtension() << "\n";
+        const bool started = recorder.start();
+        out << "尝试开始录音：" << (started ? QStringLiteral("成功") : QStringLiteral("失败")) << "\n";
+        if (!started) {
+            out << "  原因：" << recorder.lastError() << "\n";
+            out << "[环境限制] 本机没有可用输入设备，无法产出音频文件；"
+                   "mp3 **编码能力**见 --recformats，实际落盘需在有麦克风的机器/手机上验证\n";
+            return 2;
+        }
+        recorder.finish();
+        const QFileInfo take(recorder.tempPath());
+        out << "  临时文件：" << recorder.tempPath() << "　存在="
+            << (take.exists() ? QStringLiteral("是") : QStringLiteral("否"))
+            << "　大小=" << take.size() << " 字节\n";
+        out << (take.exists() && take.size() > 0 ? "[PASS] 录音已落盘\n" : "[FAIL] 录音未落盘\n");
+        return (take.exists() && take.size() > 0) ? 0 : 1;
+    }
+
+    if (parser.isSet(rollCheckOption)) {
+        // 卷帘自检要画字与 SVG（QImage + QPainter），故留在 GUI 路径上跑；
+        // 它不打开声卡，也不依赖麦克风，因此本机（无输入设备）也能跑。
+        return pitch::runRollCheck(parser.value(rollCheckOption), parser.value(rollOutOption));
+    }
 
     if (parser.isSet(metroCheckOption) || parser.isSet(metroWavOption)) {
         // 纯计算自检：不打开声卡、不起界面，故可在无音频设备的机器上跑
@@ -441,6 +506,55 @@ int main(int argc, char* argv[]) {
         return app.exec();
     }
 
+    if (parser.isSet(recFormatsOption)) {
+        // 为什么要有这个探针：「保存录音为 mp3」是否可行**完全取决于后端**——
+        // Qt 本身不带 mp3 编码器，能不能编要看 Qt Multimedia 的 FFmpeg 构建里有没有对应编码。
+        // 这类问题不能靠猜，必须把后端的实际能力列出来（实测结论见 dev-docs 的 verify/pitfalls）。
+        QTextStream out(stdout);
+#if PITCH_HAVE_QT_MULTIMEDIA
+        QMediaFormat probe;
+        out << "===== Qt Multimedia 编解码能力（Encode = 录制/保存）=====\n";
+        const QList<QMediaFormat::FileFormat> encFormats =
+            probe.supportedFileFormats(QMediaFormat::Encode);
+        out << "可编码容器数：" << encFormats.size() << "\n";
+        for (const QMediaFormat::FileFormat f : encFormats) {
+            QMediaFormat fmt(f);
+            const QList<QMediaFormat::AudioCodec> codecs =
+                fmt.supportedAudioCodecs(QMediaFormat::Encode);
+            QStringList names;
+            for (const QMediaFormat::AudioCodec c : codecs) {
+                names << QMediaFormat::audioCodecName(c);
+            }
+            out << "  · " << QMediaFormat::fileFormatName(f) << "："
+                << (names.isEmpty() ? QStringLiteral("（无音频编码）") : names.join(QStringLiteral(", ")))
+                << "\n";
+        }
+
+        out << "\n===== 可解码容器（导入素材用）=====\n";
+        const QList<QMediaFormat::FileFormat> decFormats =
+            probe.supportedFileFormats(QMediaFormat::Decode);
+        out << "可解码容器数：" << decFormats.size() << "\n";
+        QStringList flat;
+        for (const QMediaFormat::FileFormat f : decFormats) {
+            QMediaFormat fmt(f);
+            const QList<QMediaFormat::AudioCodec> codecs =
+                fmt.supportedAudioCodecs(QMediaFormat::Decode);
+            QStringList names;
+            for (const QMediaFormat::AudioCodec c : codecs) {
+                names << QMediaFormat::audioCodecName(c);
+            }
+            flat << QMediaFormat::fileFormatName(f);
+            out << "  · " << QMediaFormat::fileFormatName(f) << "："
+                << (names.isEmpty() ? QStringLiteral("（无音频编码）") : names.join(QStringLiteral(", ")))
+                << "\n";
+        }
+        out << "\n要点：mp3 的**编码**能力见第一段里是否出现 MP3；导入（解码）能力见第二段。\n";
+#else
+        out << "[FAIL] 本二进制未包含 Qt Multimedia，既不能解码 mp3，也不能录音\n";
+#endif
+        return 0;
+    }
+
     if (parser.isSet(devicesOption)) {
         QTextStream out(stdout);
         // 同样写一份文件：手机端读不到 stdout（见 --mictest 的说明）
@@ -509,13 +623,16 @@ int main(int argc, char* argv[]) {
 
     // 注册控制器为 QML 单例：整个应用只有一份会话状态，界面各页共享
     auto* session = new pitch::PitchSessionController(&app);
-    auto* fileAnalysis = new pitch::FileAnalysisController(&app);
+    // 主题要先创建：文件分析页的卷帘配色从主题令牌折算（避免"第二处颜色定义"）
+    auto* theme = new pitch::ThemeProvider(&app);
+    auto* fileAnalysis = new pitch::FileAnalysisController(theme, &app);
     // 存储访问诊断：回答"为什么在手机上选不到/读不到某些目录里的音频"（Android 存储策略 vs 权限）
     auto* storage = new pitch::StorageAccess(&app);
     // 节拍器：拍号/细分/BPM 的规则在 src/core，发声在 src/audio，这里只做界面接线与持久化
     auto* metronome = new pitch::MetronomeController(&app);
-    // 主题也走同一注册路径（qmake 构型下 QML 模块的单例声明不可用，见 theme.h 的说明）
-    auto* theme = new pitch::ThemeProvider(&app);
+    // 录音：录制引擎在 src/audio（QMediaRecorder，只有它能编 mp3），这里做界面接线。
+    // 传入会话与文件分析：录音期间复用既有采集做实时读数，保存后自动分析这段录音。
+    auto* recorder = new pitch::RecorderController(session, fileAnalysis, &app);
     if (parser.isSet(themeOption)) {
         // 临时指定主题（不落盘）：给截图与排查用；界面里的切换会正常持久化
         theme->applyMode(parser.value(themeOption));
@@ -525,6 +642,7 @@ int main(int argc, char* argv[]) {
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "FileAnalysis", fileAnalysis);
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Storage", storage);
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Metronome", metronome);
+    qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Recorder", recorder);
     qmlRegisterSingletonInstance("PitchDetector.App", 1, 0, "Theme", theme);
 
     const bool qmlCheck = parser.isSet(qmlCheckOption);
@@ -532,6 +650,9 @@ int main(int argc, char* argv[]) {
     const bool uiShot = parser.isSet(uiShotOption);
     const QString uiShotPath = parser.value(uiShotOption);
     QQmlApplicationEngine engine;
+    // 钢琴卷帘：C++ 画好一张图，QML 只负责显示（导出长图走同一份实现）
+    engine.addImageProvider(QStringLiteral("pianoroll"),
+                            new pitch::PianoRollImageProvider(fileAnalysis));
 
     // QML 入口加载（qmake 构型）
     //

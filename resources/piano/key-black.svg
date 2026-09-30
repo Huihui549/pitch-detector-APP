@@ -1,0 +1,16 @@
+<!-- 钢琴黑键（本项目原创矢量素材，随本项目授权）
+     用途：钢琴卷帘左侧键盘列的黑键贴片（键位图），由 src/app/piano-roll-renderer.cpp 用 QSvgRenderer 贴。
+     设计说明：
+       · viewBox 比例 = 62:16（比白键矮而窄，符合真实琴键的比例关系）
+       · 顶部一条浅色高光 + 深色渐变，避免在深色主题下糊成一块黑 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 62 16" width="62" height="16" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="blackKeyFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4d5764"/>
+      <stop offset="0.35" stop-color="#212831"/>
+      <stop offset="1" stop-color="#0c1015"/>
+    </linearGradient>
+  </defs>
+  <rect x="0.5" y="0.5" width="61" height="15" rx="2.5" fill="url(#blackKeyFace)" stroke="#04070a" stroke-width="1"/>
+  <rect x="3.5" y="2.2" width="55" height="1.8" rx="0.9" fill="#7b8794" opacity="0.65"/>
+</svg>

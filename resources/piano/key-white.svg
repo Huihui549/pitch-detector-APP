@@ -1,0 +1,16 @@
+<!-- 钢琴白键（本项目原创矢量素材，随本项目授权）
+     用途：钢琴卷帘左侧键盘列的白键贴片（键位图），由 src/app/piano-roll-renderer.cpp 用 QSvgRenderer 逐行贴。
+     设计说明：
+       · viewBox 比例 = 100:20（宽:高），渲染时按"键盘列宽 × 每半音行高"拉伸，故用 preserveAspectRatio="none"
+       · 上缘留一条高光、下缘压暗，模拟真实琴键的受光；描边保证在白/深两套主题下都看得清 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20" width="100" height="20" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="whiteKeyFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.55" stop-color="#f1f4f7"/>
+      <stop offset="1" stop-color="#d6dbe2"/>
+    </linearGradient>
+  </defs>
+  <rect x="0.5" y="0.5" width="99" height="19" rx="2.5" fill="url(#whiteKeyFace)" stroke="#98a1ab" stroke-width="1"/>
+  <rect x="2" y="1.6" width="96" height="2.4" rx="1.2" fill="#ffffff" opacity="0.9"/>
+</svg>

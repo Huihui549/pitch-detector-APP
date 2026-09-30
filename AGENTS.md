@@ -122,6 +122,10 @@
 | **节拍器离线自检**（无头，不碰声卡） | `bin\pitch-detector-APP.exe --metrocheck`（可加 `--metrowav <wav>` 导出试听文件） | **已实测通过**（2026-09-30）：**65/65**。核对点击位置（同角色抖动 ≤1 样点）、块长无关性（逐位相同）、重叠下按期望重建（最大差 0）、自定义样本、打包与夹紧、拍号模型 |
 | **节拍器真实输出自检** | `bin\pitch-detector-APP.exe --metrolive=3` | **已实测通过**（2026-09-30）：48000 Hz/2ch/Float32，3 秒 151552 帧、37 次回调（会真的发声） |
 | **指定页面截图** | `bin\pitch-detector-APP.exe --uishot <png> --page metro`（可加 `--theme light`） | **已实测通过**：用于按像素核对某个页面的令牌色与图标着色 |
+| **钢琴卷帘自检** | `bin\pitch-detector-APP.exe --rollcheck <音频> [--rollout <png>]` | **已实测通过**（2026-09-30）：**13/13**。解码→分析→几何→渲染→像素断言（白键行亮 244 / 黑键行 35、曲线 2987 像素、时间轴文字 230、抽样颜色 162）→ 保存 PNG |
+| **录制/编码能力探测** | `bin\pitch-detector-APP.exe --recformats` | **已实测通过**：本机后端**支持 MP3 编码**（容器 `MP3`、`MPEG-4 Audio`）；可解码 MP3/AAC/FLAC/WAVE（**Ogg 只列 FLAC**，故导入过滤器不写 ogg） |
+| **录音落盘探针** | `bin\pitch-detector-APP.exe --recprobe` | **已实测**：打印本实例**协商到的容器/音频编码/扩展名**（实测 `容器 MP3 ｜ 音频编码 MP3 ｜ .mp3`）并真的尝试录一次；无输入设备时退出码 **2**（环境限制，非代码错误） |
+| **应用图标生成** | `bin\icon-gen.exe --svg resources\branding\app-icon.svg --ico resources\branding\app-icon.ico [--png-dir <目录>]` | **已实测通过**：7 个尺寸（16/24/32/48/64/128/256）从 SVG 各渲染一次并组装成多尺寸 ICO（21 KB）。**改了 `app-icon.svg` 必须重跑**，否则 exe/资源管理器里的图标不变 |
 | 音频设备自检 | `bin\pitch-detector-APP.exe --devices` | **已实测通过**（2026-09-30）：FFmpeg 7.1 后端，设备因机器而异 |
 | 文件分析自检（无头） | `bin\pitch-detector-APP.exe --selftest <wav> --expect <音名>` | 已实测通过（A4 / A3 素材均命中） |
 | 部署 | `windeployqt --release --qmldir qml ... run\pitch-detector-APP.exe` **＋ 手工补 Qt Multimedia** | 已实测通过（孤岛运行 PASS，含设备枚举） |

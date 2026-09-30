@@ -361,6 +361,24 @@
 | 12 | 端到端延迟实测并记录（spec D3；ADR-0009 的切换条件依赖它） | 单元 11 |
 | 13 | Android 套件配置与真机验证（Multimedia 的 Android 链已就位；仍需 NDK / cmdline-tools / JDK） | 用户拍板 |
 | **16** | **节拍器后续完善（F6-a/b/c，用户已点名，等他说"完善节拍器功能"再开工）**：逐拍重音开关、逐拍静音、时值取值扩到 1–6（附点/不等分单列第二阶段）；同时按 F6-d 做配置串的版本化演进（旧串必须仍可解析） | 单元 15；**需求与验收见 `spec.md` 的「F6 增补」表** |
+| **17** | **录音的实时分析**（ADR-0017 遗留）：录音过程中把采集到的样点喂进分析链路，让卷帘随录制增长。设计要点：`QMediaRecorder` 不暴露样点 → 需并行开 `QtAudioSource`；**必须先确认真机能否同时被两个客户端打开麦克风**，不能则退化为"停止后分析整段" | 单元 15/18；**只能在手机上验证（本机无输入设备）** |
+
+## 单元 18：录音分析页重构（钢琴卷帘 / 长图导出 / 主流格式 / 现场录音）
+
+- **目标**（用户 2026-09-30 要求）：实时页删掉"近 5 秒曲线"与"选择音频文件"；音域页并入实时页；录音分析页按钮统一为实时页风格并加图标；导入支持 mp3/wav 等主流格式；曲线区改为**钢琴卷帘**（左键位图、右音高曲线、横轴时间秒）；新增录音（开始/暂停继续/停止清空/保存 mp3）；导出 CSV 改为**导出长图**。
+- **改动**：
+  - `src/app/piano-roll-renderer.{h,cpp}`（新增）：几何计算 + 卷帘渲染（左键盘列贴 `resources/piano/*.svg`、右曲线、底部时间轴）+ PNG 保存；配色由 `rollPaletteFromTheme(ThemeProvider&)` 现算（不引入第二处颜色定义）
+  - `src/app/piano-roll-image-provider.{h,cpp}`（新增）：`image://pianoroll/<revision>` → QML 的 `Image` 直接显示 C++ 渲染结果；`FileAnalysis.rollRevision` 自增即触发换图
+  - `src/audio/audio-file-decoder.{h,cpp}`（新增）：两级解码（PCM WAV 直读 → `QAudioDecoder`），供文件分析与节拍器自定义音色共用（消掉了原来那两份重复解码代码）
+  - `src/audio/audio-recorder.{h,cpp}` + `src/app/recorder-controller.{h,cpp}`（新增）：`QMediaRecorder` 录音，容器协商（MP3 → Mpeg4Audio → Wave），录到临时文件；保存=复制；停止=删除临时文件（清空）
+  - `src/app/file-analysis-controller.{h,cpp}`：解码移到主线程、分析仍在工作线程；新增卷帘属性与 `exportRollImage()`；**删除 `exportCsv()` 与 `FrameTableModel::toCsv()`**
+  - `qml/pages/FilePage.qml`：整体重写（四组 ActionButton 带图标 + 卷帘横向 Flickable + 摘要 + 逐帧表）
+  - `qml/pages/LivePage.qml`：删曲线卡与选文件按钮，新增「本次音域」卡（原音域页内容）
+  - 删除 `qml/pages/RangePage.qml` 与 `qml/components/PitchCurve.qml`（已无引用），同步清 `qmldir`/`qml.qrc`/`Main.qml`（导航回到 4 项）
+  - 新增自检 `--rollcheck`（解码→分析→渲染→像素断言→PNG）与 `--recformats`（后端编解码能力）
+- **实测**：`--rollcheck` **13/13**（图 804×82、白键行亮度 244 / 黑键行 35、曲线像素 2987、时间轴文字 230、抽样颜色 162）；`--recformats` 证明**后端支持 MP3 编码**；`--qmlcheck` 0 错误 0 警告；四道门禁全 PASS；桌面 0 error / 0 warning。
+- **未完成/未验证**：录音的麦克风路径（本机无输入设备）、压缩格式的端到端解码（本机无编码器造样本）、录音的实时分析（需先确认真机能否双客户端开麦）。
+- **踩坑**：A54（SVG 注释 `*/` 结尾导致素材失效）、A55（`computeRollGeometry` 参数顺序传反、被"独立反推期望值"的断言抓出）、A56（`Set-Content -Encoding UTF8` 写 BOM 破坏 qmldir/qrc，坑 A20 复发）。
 
 ## 遗留与未完成
 
